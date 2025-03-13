@@ -192,4 +192,6 @@ cython_debug/
 # compiled files
 *.class
 
-
+#files
+mail_archive_new_format.xlsx
+mail_archive_old_format.xlsx
