@@ -5,7 +5,7 @@ import re
 
 
 unicode_docs_emoji_keywords = {
-    "Emoji Relevant": ["emoji", "emojis", "emoticon", "emoticons", "kaomoji", "afroji", "animoji",
+    "Emoji Relevant": ["emoji", "emojis", "zwj", "emoticon", "emoticons", "kaomoji", "afroji", "animoji",
                        "emojipedia", "emojify", "emojification"]
 }
 
