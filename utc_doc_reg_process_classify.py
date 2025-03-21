@@ -12,43 +12,58 @@ unicode_docs_emoji_keywords = {
 unicode_docs_hierarchy_keywords_refined = {
     "Meeting Documents": {
         "Agendas": [
-            "agenda", "meeting agenda", "discussion topics", "topics for discussion", "planned agenda"
+            "agenda", "agendas", "meeting agenda", "discussion topic", "discussion topics", "topic for discussion", "topics for discussion"
         ],
         "Minutes": [
             "minutes", "mom", "m.o.m.", "notes from meeting", "meeting summary", "meeting record", "record of meeting"
         ],
         "Decisions & Action Items": [
-            "decision", "resolution", "conclusion", "recommendation", "approved", "approve", 
-            "reject", "rejection", "denial", "action item", "motion", "follow-up", "follow up", 
-            "heads-up", "notice", "notification", "announcement", "bulletin", "advisory"
+            "decision", "decisions", "resolution", "resolutions", "conclusion", "conclusions", "recommendation", 
+            "recommendations", "approved", "approve", "reject", "rejection", "denial", "action item", "action items",
+            "motion", "motions", "follow-up", "follow up", "follow ups",  "heads-up", "notice", "notices",
+            "notification", "notifications", "announcement", "announcements", "bulletin", "bulletins", "advisory", "advisories" 
         ]
     },
     "Public Review & Feedback": {
         "Public Review Issues (PRI)": [
-            "pri", "p.r.i.", "pri feedback", "p.r.i. feedback", "public review issue"
+            "pri", "pris", "p.r.i.", "pri feedback", "p.r.i. feedback", "public review issue", "public review issues"
         ],
         "Clarification & Queries": [
-            "clarification", "explain", "explanation", "clarify", "query", "queries", "question",
-            "inquiry", "ask", "please clarify"
+            "clarification", "clarifications","explain", "explanation", "explanations", "clarify", "query", "queries",
+            "question", "questions", "inquiry", "inquiries", "ask", "please clarify"
         ],
         "General Feedback & Correspondence": [
-            "feedback", "feed-back", "feed back", "comments", "comment", "remarks", "observations", 
-            "review", "response", "responses"
+            "feedback", "feed-back", "feed back", "comments", "comment", "remarks", "remark", "observation",
+            "observations", "review", "reviews","response", "responses", "reply to", "rebuttal", "reaction to", "counter-proposal",
+            "counter proposal", "issue", "issues", "problem", "problems", "concern", "concerns", "reaction", "reactions",
+            "notes", "discussion", "letter", "letters", "mailing list", "misc mailing", "mails"
         ]
     },
     "Proposals": {
         "Character Encoding Proposals": [
-            "proposal", "proposed", "prop.", "submission", "encode", "addition", "add", 
-            "new character", "new script", "character proposal", "script proposal"
+            "proposal", "proposals", "proposed", "prop.", "submission", "submissions", "encode",
+            "addition", "add", "new character", "new characters", "new script", "new scripts",
+            "disunify", "unify", "un-encode", "unencode", "de-unify", "request to encode",
+            "request for codepoints", "request for addition", "draft encoding",
+            "new emoji", "emoji submission",  "emoji submissions"
         ],
         "Technical & Process Proposals": [
-            "change request", "change order", "addendum", "amendment", "extension", "revision", 
-            "revised doc", "appendix", "modification", "process proposal", "technical proposal"
+            "change request", "change requests", "change order", "change orders",
+            "addendum", "addenda", "amendment", "amendments", "extension", "extensions",
+            "revision", "revisions", "revised", "revised doc",
+            "appendix", "appendices", "modification", "modifications",
+            "process proposal", "process proposals", "technical proposal", "technical proposals",
+            "update", "updates", "edit", "edits", "refine", "refinement", "synchronize", "synchronization",
+            "fix", "fixes", "fixed","alternative", "alternatives", "alternative encoding",
+            "line_break", "word_break", "sentence_break", "line break", "line breaks", "word break",
+            "word breaks", "sentence break", "sentence breaks","collation", "normalization", "normalizations",
+            "compatibility", "data file", "data files", "code chart", "code charts", "nameslist", "alias",
+            "aliases", "terminal_punctuation", "namespace", "loose matching"
         ]
     },
     "Standards & Specifications": {
         "Unicode Standard & Annexes (UAX)": [
-            "uax", "unicode standard annex", "unicode annex", "annex", "uax#"
+            "uax", "unicode standard annex", "unicode annex", "annex", "uax#", "annex update", "(snapshot)"
         ],
         "Unicode Technical Standards (UTS)": [
             "uts", "unicode technical standard", "uts#"
@@ -60,27 +75,30 @@ unicode_docs_hierarchy_keywords_refined = {
             "utn", "unicode technical note", "utn#"
         ],
         "Errata & Corrigenda": [
-            "errata", "erratum", "corrigendum", "corrigenda", "correction"
+            "errata", "erratum", "corrigendum", "corrigenda", "correction", "corrections",
+            "issue", "issues", "error", "errors", "bug", "bugs", "typo", "typos",
+            "inconsistency", "inconsistencies", "problem", "problems", "wrong",
+            "defect", "defects", "suspicious", "fix", "fixes", "missing"
         ]
     },
     "Liaison & External": {
         "ISO/IEC WG2 Documents & Ballots": [
-            "iso", "wg2", "iec", "jtc1", "sc2", "ballot", "national body", "iso ballot", "iso comment"
+            "iso", "wg2", "iec", "jtc1", "sc2", "ballot", "ballots", "national body", "iso ballot",
+            "iso comment", "joint technical committee", "nb comment", "nxxx doc", "irg n", "irg #"
         ],
         "Liaison Reports & Agreements": [
-            "liaison", "mou", "memorandum of understanding", "agreement", "contract", 
-            "service-level agreement", "sla", "liaison report"
+            "liaison", "mou", "memorandum of understanding", "agreement",  "agreements", "contract", "sla", "liaison report"
         ]
     },
     "Administrative & Miscellaneous": {
         "Document Registers & Indexes": [
-            "document register", "register", "index", "doc register"
+            "register","registers", "index", "indexes"
         ],
         "Schedules & Planning": [
-            "schedule", "planning", "timetable", "release plan", "roadmap", "calendar"
+            "schedule", "schedules", "planning", "timetable", "timetables", "release plan", "release plans", "roadmap", "roadmaps", "calendar", "calendars"
         ],
         "Memo/Circular": [
-            "memo", "memorandum", "circular", "internal note", "bulletin"
+            "memo", "memos", "memorandum", "memoranda", "circular", "circulars", "internal note", "internal notes", "bulletin", "bulletins"
         ]
     }
 }
