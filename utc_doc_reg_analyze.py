@@ -38,10 +38,25 @@ df.dropna(subset=['date'], inplace=True)                  # remove rows with inv
 df['year'] = df['date'].dt.year                           # extract year
 
 # The DataFrame has columns like:
-#   doc_num | doc_url | subject | source | date | doc_type
+#   doc_num | doc_url | subject | source | date | doc_type | emoji_relevance
 # Where doc_type is something like:
 #   {"Public Review & Feedback": ["General Feedback & Correspondence"],
 #    "Proposals": ["Character Encoding Proposals"]}
+# where emoji_relevance is a single category like "Emoji Relevant" or "Irrelevant".
+
+# Create datasets filtered by emoji relevance
+df_emoji = df[df['emoji_relevance'] == 'Emoji Relevant']
+df_non_emoji = df[df['emoji_relevance'] == 'Irrelevant']
+
+# Print summary statistics about emoji relevance
+total_docs = len(df)
+emoji_docs = len(df_emoji)
+non_emoji_docs = len(df_non_emoji)
+emoji_percentage = (emoji_docs / total_docs) * 100 if total_docs > 0 else 0
+
+print(f"Total documents: {total_docs}")
+print(f"Emoji-relevant documents: {emoji_docs} ({emoji_percentage:.2f}%)")
+print(f"Non-emoji documents: {non_emoji_docs} ({100-emoji_percentage:.2f}%)")
 
 ################################################################################
 # Function to create plots directory and sanitize filenames
@@ -58,10 +73,99 @@ doc_counts_dir = os.path.join(plots_dir, 'document_counts')
 sources_dir = os.path.join(plots_dir, 'sources')
 data_dir = os.path.join(working_dir, 'data')
 
+# Create additional directories for emoji analysis
+emoji_dir = os.path.join(plots_dir, 'emoji_analysis')
+emoji_counts_dir = os.path.join(emoji_dir, 'document_counts')
+emoji_sources_dir = os.path.join(emoji_dir, 'sources')
+emoji_trends_dir = os.path.join(emoji_dir, 'trends')
+emoji_comparative_dir = os.path.join(emoji_dir, 'comparative')
+
 # Create directories if they don't exist
 os.makedirs(doc_counts_dir, exist_ok=True)
 os.makedirs(sources_dir, exist_ok=True)
 os.makedirs(data_dir, exist_ok=True)
+os.makedirs(emoji_dir, exist_ok=True)
+os.makedirs(emoji_counts_dir, exist_ok=True)
+os.makedirs(emoji_sources_dir, exist_ok=True)
+os.makedirs(emoji_trends_dir, exist_ok=True)
+os.makedirs(emoji_comparative_dir, exist_ok=True)
+
+# Helper function to process dataframe based on emoji relevance
+def process_dataframe_by_relevance(df_input, relevance=None):
+    """
+    Process a dataframe to expand doc_type into category and subcategory.
+    If relevance is specified, filter by emoji_relevance.
+    """
+    if relevance:
+        df_filtered = df_input[df_input['emoji_relevance'] == relevance]
+    else:
+        df_filtered = df_input.copy()
+    
+    expanded_rows = []
+    
+    for idx, row in df_filtered.iterrows():
+        doc_num = row['doc_num']
+        doc_url = row['doc_url']
+        subject = row['subject']
+        source = row['source']
+        date_  = row['date']
+        year   = row['year']
+        emoji_relevance = row['emoji_relevance']
+        
+        try:
+            doc_type_dict = row['doc_type']
+            if isinstance(doc_type_dict, str):
+                doc_type_dict = ast.literal_eval(doc_type_dict)
+        except:
+            doc_type_dict = {"Others/Miscellaneous": []}
+
+        if not doc_type_dict:
+            expanded_rows.append({
+                'doc_num': doc_num,
+                'doc_url': doc_url,
+                'subject': subject,
+                'source': source,
+                'date': date_,
+                'year': year,
+                'category': 'Others/Miscellaneous',
+                'subcategory': '',
+                'emoji_relevance': emoji_relevance
+            })
+            continue
+
+        for cat, subcats in doc_type_dict.items():
+            if not subcats:
+                expanded_rows.append({
+                    'doc_num': doc_num,
+                    'doc_url': doc_url,
+                    'subject': subject,
+                    'source': source,
+                    'date': date_,
+                    'year': year,
+                    'category': cat,
+                    'subcategory': '',
+                    'emoji_relevance': emoji_relevance
+                })
+            else:
+                for subcat in subcats:
+                    expanded_rows.append({
+                        'doc_num': doc_num,
+                        'doc_url': doc_url,
+                        'subject': subject,
+                        'source': source,
+                        'date': date_,
+                        'year': year,
+                        'category': cat,
+                        'subcategory': subcat,
+                        'emoji_relevance': emoji_relevance
+                    })
+    
+    return pd.DataFrame(expanded_rows)
+
+# Process all dataframes
+df_expanded = process_dataframe_by_relevance(df)
+df_emoji_expanded = process_dataframe_by_relevance(df, 'Emoji Relevant')
+df_non_emoji_expanded = process_dataframe_by_relevance(df, 'Irrelevant')
 
 ################################################################################
 # 2) Expand doc_type to Handle Multiple Categories/Subcategories
@@ -511,3 +615,704 @@ print(f"Trend analysis plots saved in: {trends_dir}")
 print(f"Text analysis plots saved in: {text_dir}")
 print(f"Time series plots saved in: {timeseries_dir}")
 print(f"Correlation plots saved in: {corr_dir}")
+
+################################################################################
+# NEW: Emoji Relevance Analysis
+################################################################################
+
+# 1. Emoji Documents Distribution by Year
+emoji_by_year = df_expanded.groupby(['year', 'emoji_relevance']).size().unstack(fill_value=0)
+if 'Emoji Relevant' not in emoji_by_year.columns:
+    emoji_by_year['Emoji Relevant'] = 0
+if 'Irrelevant' not in emoji_by_year.columns:
+    emoji_by_year['Irrelevant'] = 0
+
+# Calculate percentages
+emoji_by_year['Total'] = emoji_by_year.sum(axis=1)
+emoji_by_year['Emoji %'] = (emoji_by_year['Emoji Relevant'] / emoji_by_year['Total'] * 100).round(1)
+
+# Save the data
+emoji_year_excel = os.path.join(data_dir, 'emoji_distribution_by_year.xlsx')
+emoji_by_year.to_excel(emoji_year_excel)
+print(f"Emoji distribution by year saved to: {emoji_year_excel}")
+
+# Plot the emoji distribution by year (stacked bar chart)
+plt.figure(figsize=(14, 8))
+ax = emoji_by_year[['Emoji Relevant', 'Irrelevant']].plot(
+    kind='bar', 
+    stacked=True, 
+    colormap='viridis',
+    ax=plt.gca()
+)
+plt.title('Document Distribution by Emoji Relevance and Year', fontweight='bold', pad=20)
+plt.xlabel('Year', fontweight='bold')
+plt.ylabel('Number of Documents', fontweight='bold')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.legend(title='Emoji Relevance')
+
+# Add percentage labels on top of each bar
+for i, year in enumerate(emoji_by_year.index):
+    total = emoji_by_year.loc[year, 'Total']
+    emoji_count = emoji_by_year.loc[year, 'Emoji Relevant']
+    emoji_pct = emoji_by_year.loc[year, 'Emoji %']
+    if total > 0:
+        plt.annotate(f"{emoji_pct}%",
+                    xy=(i, total + 5),
+                    ha='center',
+                    va='bottom',
+                    fontweight='bold',
+                    color='darkred')
+
+plt.tight_layout()
+emoji_year_file = os.path.join(emoji_comparative_dir, 'emoji_distribution_by_year.png')
+plt.savefig(emoji_year_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# 2. Document Category Distribution by Emoji Relevance
+# Create pivot tables for both emoji and non-emoji documents
+emoji_category_counts = df_emoji_expanded.groupby(['category']).size().reset_index(name='count')
+non_emoji_category_counts = df_non_emoji_expanded.groupby(['category']).size().reset_index(name='count')
+
+# Sort by count for better visualization
+emoji_category_counts = emoji_category_counts.sort_values('count', ascending=False)
+non_emoji_category_counts = non_emoji_category_counts.sort_values('count', ascending=False)
+
+# Save the data
+emoji_cat_excel = os.path.join(data_dir, 'emoji_category_distribution.xlsx')
+emoji_category_counts.to_excel(emoji_cat_excel, index=False)
+print(f"Emoji category distribution saved to: {emoji_cat_excel}")
+
+# Plot the top 10 categories for emoji-relevant documents
+plt.figure(figsize=(14, 8))
+ax = sns.barplot(
+    x='count',
+    y='category',
+    data=emoji_category_counts.head(10),
+    palette='viridis'
+)
+plt.title('Top 10 Categories for Emoji-Relevant Documents', fontweight='bold', pad=20)
+plt.xlabel('Number of Documents', fontweight='bold')
+plt.ylabel('Category', fontweight='bold')
+plt.grid(axis='x', linestyle='--', alpha=0.7)
+
+# Add count labels
+for i, v in enumerate(emoji_category_counts.head(10)['count']):
+    ax.text(v + 0.5, i, str(v), va='center')
+
+plt.tight_layout()
+emoji_cat_file = os.path.join(emoji_counts_dir, 'emoji_top_categories.png')
+plt.savefig(emoji_cat_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# 3. Emoji Category Trends Over Time
+# Analyze trends for emoji-relevant documents by category and year
+emoji_cat_year = df_emoji_expanded.groupby(['year', 'category']).size().unstack(fill_value=0)
+
+# Get the top 5 categories for emoji documents
+top_emoji_cats = emoji_category_counts.head(5)['category'].tolist()
+emoji_cat_year_filtered = emoji_cat_year[top_emoji_cats] if set(top_emoji_cats).issubset(set(emoji_cat_year.columns)) else emoji_cat_year
+
+# Plot the trends
+plt.figure(figsize=(14, 8))
+ax = emoji_cat_year_filtered.plot(
+    kind='line',
+    marker='o',
+    linewidth=2.5,
+    markersize=8,
+    ax=plt.gca()
+)
+plt.title('Emoji-Relevant Document Trends by Category', fontweight='bold', pad=20)
+plt.xlabel('Year', fontweight='bold')
+plt.ylabel('Number of Documents', fontweight='bold')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(title='Category', title_fontsize=12, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+# Add data point labels
+for line in ax.lines:
+    y_data = line.get_ydata()
+    x_data = line.get_xdata()
+    for x, y in zip(x_data, y_data):
+        if y > 0:  # Only label non-zero values
+            ax.annotate(f'{int(y)}', (x, y), textcoords="offset points",
+                        xytext=(0, 5), ha='center', fontsize=9)
+
+plt.tight_layout()
+emoji_trend_file = os.path.join(emoji_trends_dir, 'emoji_category_trends.png')
+plt.savefig(emoji_trend_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# 4. Comparative Analysis: Emoji vs. Non-Emoji Sources
+# Find top contributors for emoji documents
+emoji_sources = df_emoji_expanded['source'].astype(str).str.split(',')
+emoji_sources = emoji_sources.explode().str.strip()
+emoji_sources = emoji_sources[emoji_sources != '']
+emoji_source_counts = emoji_sources.value_counts().reset_index()
+emoji_source_counts.columns = ['source', 'count']
+emoji_source_counts = emoji_source_counts.sort_values('count', ascending=False)
+
+# Save the data
+emoji_source_excel = os.path.join(data_dir, 'emoji_source_distribution.xlsx')
+emoji_source_counts.to_excel(emoji_source_excel, index=False)
+print(f"Emoji source distribution saved to: {emoji_source_excel}")
+
+# Plot the top contributors for emoji documents
+plt.figure(figsize=(14, 8))
+ax = sns.barplot(
+    x='count',
+    y='source',
+    data=emoji_source_counts.head(10),
+    palette='plasma'
+)
+plt.title('Top 10 Contributors to Emoji-Relevant Documents', fontweight='bold', pad=20)
+plt.xlabel('Number of Contributions', fontweight='bold')
+plt.ylabel('Contributor', fontweight='bold')
+plt.grid(axis='x', linestyle='--', alpha=0.7)
+
+# Add count labels
+for i, v in enumerate(emoji_source_counts.head(10)['count']):
+    ax.text(v + 0.5, i, str(v), va='center')
+
+plt.tight_layout()
+emoji_source_file = os.path.join(emoji_sources_dir, 'emoji_top_contributors.png')
+plt.savefig(emoji_source_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# 5. Compare emoji vs non-emoji document types using a side-by-side bar chart
+# Get the data for the most common categories in both
+top_categories = pd.concat([
+    emoji_category_counts.head(5).assign(type='Emoji Relevant'),
+    non_emoji_category_counts.head(5).assign(type='Irrelevant')
+])
+
+# Plot side-by-side comparison
+plt.figure(figsize=(16, 10))
+ax = sns.barplot(
+    x='category',
+    y='count',
+    hue='type',
+    data=top_categories,
+    palette=['#1f77b4', '#ff7f0e']
+)
+plt.title('Top Categories: Emoji vs. Non-Emoji Documents', fontweight='bold', pad=20)
+plt.xlabel('Category', fontweight='bold')
+plt.ylabel('Number of Documents', fontweight='bold')
+plt.xticks(rotation=45, ha='right')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.legend(title='Document Type')
+
+# Add count labels
+for container in ax.containers:
+    ax.bar_label(container, fmt='%d')
+
+plt.tight_layout()
+comparison_file = os.path.join(emoji_comparative_dir, 'emoji_vs_non_emoji_categories.png')
+plt.savefig(comparison_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# 6. Word Cloud comparison for emoji vs non-emoji subjects
+# Word cloud for emoji subjects
+emoji_subjects = ' '.join(df_emoji['subject'].astype(str).dropna())
+
+if len(emoji_subjects) > 50:
+    emoji_wordcloud = WordCloud(
+        width=800, height=400,
+        background_color='white',
+        colormap='viridis',
+        max_words=100,
+        contour_width=1,
+        contour_color='steelblue'
+    ).generate(emoji_subjects)
+
+    plt.figure(figsize=(16, 8))
+    plt.imshow(emoji_wordcloud, interpolation='bilinear')
+    plt.axis('off')
+    plt.title('Word Cloud of Emoji-Relevant Document Subjects', fontweight='bold', fontsize=16, pad=20)
+    plt.tight_layout()
+    emoji_wordcloud_file = os.path.join(emoji_dir, 'emoji_subject_wordcloud.png')
+    plt.savefig(emoji_wordcloud_file, dpi=300, bbox_inches='tight')
+    plt.close()
+
+# 7. Emoji relevance by time period - quarterly analysis
+emoji_quarterly = df_expanded.groupby(['year', 'quarter', 'emoji_relevance']).size().unstack(fill_value=0)
+if 'Emoji Relevant' not in emoji_quarterly.columns:
+    emoji_quarterly['Emoji Relevant'] = 0
+if 'Irrelevant' not in emoji_quarterly.columns:
+    emoji_quarterly['Irrelevant'] = 0
+
+emoji_quarterly['Total'] = emoji_quarterly.sum(axis=1)
+emoji_quarterly['Emoji %'] = (emoji_quarterly['Emoji Relevant'] / emoji_quarterly['Total'] * 100).round(1)
+emoji_quarterly = emoji_quarterly.reset_index()
+emoji_quarterly['year_quarter'] = emoji_quarterly['year'].astype(str) + '-Q' + emoji_quarterly['quarter'].astype(str)
+
+# Create a line chart showing the percentage of emoji-relevant documents over time
+plt.figure(figsize=(16, 8))
+ax = sns.lineplot(
+    x='year_quarter',
+    y='Emoji %',
+    data=emoji_quarterly,
+    marker='o',
+    markersize=8,
+    linewidth=2
+)
+plt.title('Percentage of Emoji-Relevant Documents by Quarter', fontweight='bold', pad=20)
+plt.xlabel('Year-Quarter', fontweight='bold')
+plt.ylabel('Emoji-Relevant Documents (%)', fontweight='bold')
+plt.xticks(rotation=90)
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# Add percentage labels
+for i, row in emoji_quarterly.iterrows():
+    if not np.isnan(row['Emoji %']):
+        ax.annotate(f"{row['Emoji %']}%",
+                   xy=(i, row['Emoji %']),
+                   xytext=(0, 5),
+                   textcoords='offset points',
+                   ha='center',
+                   fontsize=9)
+
+plt.tight_layout()
+emoji_quarterly_file = os.path.join(emoji_trends_dir, 'emoji_percentage_by_quarter.png')
+plt.savefig(emoji_quarterly_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+################################################################################ 
+# 8. NEW: Additional Emoji Analysis - Subcategory Analysis
+################################################################################
+
+# Create a directory for subcategory analysis
+emoji_subcats_dir = os.path.join(emoji_dir, 'subcategories')
+os.makedirs(emoji_subcats_dir, exist_ok=True)
+
+# Analyze emoji-relevant documents by subcategory
+emoji_subcat_counts = df_emoji_expanded.groupby(['category', 'subcategory']).size().reset_index(name='count')
+emoji_subcat_counts = emoji_subcat_counts.sort_values(['category', 'count'], ascending=[True, False])
+
+# Save subcategory data
+emoji_subcat_excel = os.path.join(data_dir, 'emoji_subcategory_distribution.xlsx')
+emoji_subcat_counts.to_excel(emoji_subcat_excel, index=False)
+print(f"Emoji subcategory distribution saved to: {emoji_subcat_excel}")
+
+# For each major category with emoji documents, create a visualization of its subcategories
+for category in emoji_category_counts.head(10)['category']:
+    cat_subcats = emoji_subcat_counts[emoji_subcat_counts['category'] == category]
+    
+    if len(cat_subcats) > 0:
+        plt.figure(figsize=(14, max(6, len(cat_subcats) * 0.4)))
+        ax = sns.barplot(
+            x='count',
+            y='subcategory',
+            data=cat_subcats,
+            palette='viridis'
+        )
+        plt.title(f'Emoji-Relevant Documents: Subcategories of {category}', fontweight='bold', pad=20)
+        plt.xlabel('Number of Documents', fontweight='bold')
+        plt.ylabel('Subcategory', fontweight='bold')
+        plt.grid(axis='x', linestyle='--', alpha=0.7)
+        
+        # Add count labels
+        for i, v in enumerate(cat_subcats['count']):
+            ax.text(v + 0.5, i, str(v), va='center')
+        
+        plt.tight_layout()
+        cat_clean = sanitize_filename(category)
+        subcat_file = os.path.join(emoji_subcats_dir, f'emoji_subcats_{cat_clean}.png')
+        plt.savefig(subcat_file, dpi=300, bbox_inches='tight')
+        plt.close()
+
+################################################################################
+# 9. NEW: Emoji Document Timeline Analysis
+################################################################################
+
+# Create timeline directory
+emoji_timeline_dir = os.path.join(emoji_dir, 'timeline')
+os.makedirs(emoji_timeline_dir, exist_ok=True)
+
+# Sort data chronologically
+df_emoji_sorted = df_emoji.sort_values('date')
+df_emoji_sorted['cumulative_count'] = range(1, len(df_emoji_sorted) + 1)
+
+# Plot cumulative emoji document submissions over time
+plt.figure(figsize=(16, 8))
+ax = plt.plot(
+    df_emoji_sorted['date'],
+    df_emoji_sorted['cumulative_count'],
+    marker='.',
+    linestyle='-',
+    color='#1f77b4',
+    linewidth=2
+)
+plt.title('Cumulative Emoji-Relevant Document Submissions Over Time', fontweight='bold', pad=20)
+plt.xlabel('Date', fontweight='bold')
+plt.ylabel('Cumulative Number of Documents', fontweight='bold')
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# Format x-axis date labels
+plt.gcf().autofmt_xdate()
+date_format = mdates.DateFormatter('%Y-%m')
+plt.gca().xaxis.set_major_formatter(date_format)
+plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+
+plt.tight_layout()
+timeline_file = os.path.join(emoji_timeline_dir, 'emoji_document_timeline.png')
+plt.savefig(timeline_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+################################################################################
+# 10. NEW: Emoji vs Non-Emoji Source Overlap Analysis
+################################################################################
+
+# Create overlap directory
+emoji_overlap_dir = os.path.join(emoji_dir, 'overlap_analysis')
+os.makedirs(emoji_overlap_dir, exist_ok=True)
+
+# Get sources for emoji documents
+emoji_sources_set = set(emoji_sources.unique())
+
+# Get sources for non-emoji documents
+non_emoji_sources = df_non_emoji_expanded['source'].astype(str).str.split(',')
+non_emoji_sources = non_emoji_sources.explode().str.strip()
+non_emoji_sources = non_emoji_sources[non_emoji_sources != '']
+non_emoji_sources_set = set(non_emoji_sources.unique())
+
+# Find overlap
+sources_overlap = emoji_sources_set.intersection(non_emoji_sources_set)
+emoji_only_sources = emoji_sources_set - non_emoji_sources_set
+non_emoji_only_sources = non_emoji_sources_set - emoji_sources_set
+
+# Create and save a summary
+source_overlap_data = pd.DataFrame({
+    'Category': ['Emoji Only', 'Both Emoji & Non-Emoji', 'Non-Emoji Only'],
+    'Count': [len(emoji_only_sources), len(sources_overlap), len(non_emoji_only_sources)]
+})
+
+overlap_excel = os.path.join(data_dir, 'source_overlap_analysis.xlsx')
+source_overlap_data.to_excel(overlap_excel, index=False)
+print(f"Source overlap analysis saved to: {overlap_excel}")
+
+# Visualize source overlap with a Venn-like diagram (pie chart)
+plt.figure(figsize=(14, 8))
+ax = plt.pie(
+    source_overlap_data['Count'],
+    labels=source_overlap_data['Category'],
+    autopct='%1.1f%%',
+    colors=['#ff9999', '#66b3ff', '#99ff99'],
+    startangle=90,
+    shadow=True,
+    explode=(0.1, 0.1, 0.1)
+)
+plt.title('Distribution of Sources Between Emoji and Non-Emoji Documents', fontweight='bold', pad=20)
+
+plt.tight_layout()
+overlap_file = os.path.join(emoji_overlap_dir, 'source_category_overlap.png')
+plt.savefig(overlap_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+################################################################################
+# 11. NEW: Emoji Rate Analysis by Year
+################################################################################
+
+# Calculate the rate of emoji document submissions per year
+emoji_rates = pd.DataFrame({
+    'Year': emoji_by_year.index,
+    'Emoji_Count': emoji_by_year['Emoji Relevant'],
+    'Total_Count': emoji_by_year['Total'],
+    'Percentage': emoji_by_year['Emoji %']
+})
+
+# Calculate year-over-year change in emoji document percentage
+emoji_rates['YoY_Change'] = emoji_rates['Percentage'].diff()
+
+# Save the analysis
+emoji_rates_excel = os.path.join(data_dir, 'emoji_yearly_rates.xlsx')
+emoji_rates.to_excel(emoji_rates_excel, index=False)
+print(f"Emoji yearly rates saved to: {emoji_rates_excel}")
+
+# Create a combo chart: bars for counts, line for percentage
+fig, ax1 = plt.subplots(figsize=(16, 8))
+
+# Plot bars for emoji and non-emoji counts
+x = np.arange(len(emoji_rates))
+width = 0.35
+emoji_bars = ax1.bar(x - width/2, emoji_rates['Emoji_Count'], width, label='Emoji Documents', color='#1f77b4')
+non_emoji_bars = ax1.bar(x + width/2, emoji_rates['Total_Count'] - emoji_rates['Emoji_Count'], width, 
+                         label='Non-Emoji Documents', color='#ff7f0e')
+
+ax1.set_xlabel('Year', fontweight='bold')
+ax1.set_ylabel('Number of Documents', fontweight='bold')
+ax1.set_title('Emoji Document Counts and Percentage by Year', fontweight='bold', pad=20)
+ax1.set_xticks(x)
+ax1.set_xticklabels(emoji_rates['Year'])
+ax1.legend(loc='upper left')
+
+# Create second y-axis for percentage
+ax2 = ax1.twinx()
+emoji_line = ax2.plot(x, emoji_rates['Percentage'], linestyle='-', marker='o', 
+                     linewidth=2, color='red', label='Emoji %')
+ax2.set_ylabel('Emoji Documents (%)', color='red', fontweight='bold')
+ax2.tick_params(axis='y', labelcolor='red')
+
+# Add a separate legend for the percentage line
+lines, labels = ax2.get_legend_handles_labels()
+ax2.legend(lines, labels, loc='upper right')
+
+# Add data labels
+for i, v in enumerate(emoji_rates['Percentage']):
+    if not np.isnan(v):
+        ax2.annotate(f"{v:.1f}%",
+                    xy=(i, v),
+                    xytext=(0, 5),
+                    textcoords='offset points',
+                    ha='center',
+                    color='red',
+                    fontweight='bold')
+
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+rates_file = os.path.join(emoji_trends_dir, 'emoji_rates_by_year.png')
+plt.savefig(rates_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+################################################################################
+# 12. NEW: Emoji Document Submission Patterns by Month
+################################################################################
+
+# Add month analysis for emoji documents
+df_emoji_expanded['month'] = df_emoji_expanded['date'].dt.month
+df_non_emoji_expanded['month'] = df_non_emoji_expanded['date'].dt.month
+
+# Compare monthly patterns of emoji vs non-emoji documents
+emoji_monthly = df_emoji_expanded.groupby('month').size()
+non_emoji_monthly = df_non_emoji_expanded.groupby('month').size()
+
+# Calculate percentages to normalize the data
+emoji_monthly_pct = (emoji_monthly / emoji_monthly.sum() * 100).round(1)
+non_emoji_monthly_pct = (non_emoji_monthly / non_emoji_monthly.sum() * 100).round(1)
+
+# Combine into a dataframe
+monthly_pattern = pd.DataFrame({
+    'Emoji Count': emoji_monthly,
+    'Emoji %': emoji_monthly_pct,
+    'Non-Emoji Count': non_emoji_monthly,
+    'Non-Emoji %': non_emoji_monthly_pct
+})
+
+# Save the data
+monthly_excel = os.path.join(data_dir, 'emoji_monthly_patterns.xlsx')
+monthly_pattern.to_excel(monthly_excel)
+print(f"Emoji monthly patterns saved to: {monthly_excel}")
+
+# Create a bar chart comparing percentages by month
+plt.figure(figsize=(14, 8))
+monthly_pattern_plot = pd.DataFrame({
+    'Emoji-Relevant': emoji_monthly_pct,
+    'Irrelevant': non_emoji_monthly_pct
+})
+
+ax = monthly_pattern_plot.plot(
+    kind='bar',
+    width=0.8,
+    color=['#1f77b4', '#ff7f0e']
+)
+plt.title('Monthly Submission Patterns: Emoji vs. Non-Emoji Documents', fontweight='bold', pad=20)
+plt.xlabel('Month', fontweight='bold')
+plt.ylabel('Percentage of Documents (%)', fontweight='bold')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.legend(title='Document Type')
+
+# Format x-axis to show month names
+month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+plt.xticks(range(12), month_names)
+
+# Add percentage labels
+for container in ax.containers:
+    ax.bar_label(container, fmt='%.1f%%')
+
+plt.tight_layout()
+monthly_pattern_file = os.path.join(emoji_trends_dir, 'emoji_monthly_patterns.png')
+plt.savefig(monthly_pattern_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# Print information about the additional emoji analysis
+print("\nExpanded Emoji Analysis Summary:")
+print(f"Emoji subcategory analysis: {emoji_subcats_dir}")
+print(f"Emoji timeline analysis: {timeline_file}")
+print(f"Source overlap analysis: {overlap_file}")
+print(f"Emoji submission rates: {rates_file}")
+print(f"Monthly submission patterns: {monthly_pattern_file}")
+
+################################################################################
+# 13. Final Analysis and Comparative Summary
+################################################################################
+
+# Create a final summary directory
+summary_dir = os.path.join(plots_dir, 'summary')
+os.makedirs(summary_dir, exist_ok=True)
+
+# Create a comprehensive summary table of emoji vs non-emoji analysis
+summary_data = {
+    'Metric': [
+        'Total Documents',
+        'Documents by Category (Top Category)',
+        'Documents by Subcategory (Top Subcategory)',
+        'Top Contributor',
+        'Documents per Year (Average)',
+        'Monthly Peak (Month with most documents)',
+        'Quarterly Peak (Quarter with most documents)'
+    ]
+}
+
+# Calculate metrics for emoji documents
+emoji_top_category = emoji_category_counts.iloc[0]['category'] if not emoji_category_counts.empty else 'N/A'
+emoji_top_category_count = emoji_category_counts.iloc[0]['count'] if not emoji_category_counts.empty else 0
+
+emoji_top_subcategory = emoji_subcat_counts.iloc[0]['subcategory'] if not emoji_subcat_counts.empty else 'N/A'
+emoji_top_subcategory_count = emoji_subcat_counts.iloc[0]['count'] if not emoji_subcat_counts.empty else 0
+
+emoji_top_contributor = emoji_source_counts.iloc[0]['source'] if not emoji_source_counts.empty else 'N/A'
+emoji_top_contributor_count = emoji_source_counts.iloc[0]['count'] if not emoji_source_counts.empty else 0
+
+emoji_docs_per_year = len(df_emoji) / len(emoji_by_year) if len(emoji_by_year) > 0 else 0
+
+emoji_monthly_peak = emoji_monthly.idxmax() if not emoji_monthly.empty else 0
+emoji_monthly_peak_value = emoji_monthly.max() if not emoji_monthly.empty else 0
+emoji_monthly_peak_month = month_names[emoji_monthly_peak-1] if not emoji_monthly.empty else 'N/A'
+
+emoji_quarterly = df_emoji_expanded.groupby('quarter').size()
+emoji_quarterly_peak = emoji_quarterly.idxmax() if not emoji_quarterly.empty else 0
+emoji_quarterly_peak_value = emoji_quarterly.max() if not emoji_quarterly.empty else 0
+
+# Calculate metrics for non-emoji documents
+non_emoji_top_category = non_emoji_category_counts.iloc[0]['category'] if not non_emoji_category_counts.empty else 'N/A'
+non_emoji_top_category_count = non_emoji_category_counts.iloc[0]['count'] if not non_emoji_category_counts.empty else 0
+
+non_emoji_subcat_counts = df_non_emoji_expanded.groupby(['category', 'subcategory']).size().reset_index(name='count')
+non_emoji_subcat_counts = non_emoji_subcat_counts.sort_values('count', ascending=False)
+non_emoji_top_subcategory = non_emoji_subcat_counts.iloc[0]['subcategory'] if not non_emoji_subcat_counts.empty else 'N/A'
+non_emoji_top_subcategory_count = non_emoji_subcat_counts.iloc[0]['count'] if not non_emoji_subcat_counts.empty else 0
+
+non_emoji_sources = df_non_emoji_expanded['source'].astype(str).str.split(',')
+non_emoji_sources = non_emoji_sources.explode().str.strip()
+non_emoji_sources = non_emoji_sources[non_emoji_sources != '']
+non_emoji_source_counts = non_emoji_sources.value_counts().reset_index()
+non_emoji_source_counts.columns = ['source', 'count']
+non_emoji_top_contributor = non_emoji_source_counts.iloc[0]['source'] if not non_emoji_source_counts.empty else 'N/A'
+non_emoji_top_contributor_count = non_emoji_source_counts.iloc[0]['count'] if not non_emoji_source_counts.empty else 0
+
+non_emoji_docs_per_year = len(df_non_emoji) / len(emoji_by_year) if len(emoji_by_year) > 0 else 0
+
+non_emoji_monthly_peak = non_emoji_monthly.idxmax() if not non_emoji_monthly.empty else 0
+non_emoji_monthly_peak_value = non_emoji_monthly.max() if not non_emoji_monthly.empty else 0
+non_emoji_monthly_peak_month = month_names[non_emoji_monthly_peak-1] if not non_emoji_monthly.empty else 'N/A'
+
+non_emoji_quarterly = df_non_emoji_expanded.groupby('quarter').size()
+non_emoji_quarterly_peak = non_emoji_quarterly.idxmax() if not non_emoji_quarterly.empty else 0
+non_emoji_quarterly_peak_value = non_emoji_quarterly.max() if not non_emoji_quarterly.empty else 0
+
+# Add calculated metrics to summary data
+summary_data['Emoji Relevant'] = [
+    f"{emoji_docs}",
+    f"{emoji_top_category} ({emoji_top_category_count})",
+    f"{emoji_top_subcategory} ({emoji_top_subcategory_count})",
+    f"{emoji_top_contributor} ({emoji_top_contributor_count})",
+    f"{emoji_docs_per_year:.1f}",
+    f"{emoji_monthly_peak_month} ({emoji_monthly_peak_value})",
+    f"Q{emoji_quarterly_peak} ({emoji_quarterly_peak_value})"
+]
+
+summary_data['Irrelevant'] = [
+    f"{non_emoji_docs}",
+    f"{non_emoji_top_category} ({non_emoji_top_category_count})",
+    f"{non_emoji_top_subcategory} ({non_emoji_top_subcategory_count})",
+    f"{non_emoji_top_contributor} ({non_emoji_top_contributor_count})",
+    f"{non_emoji_docs_per_year:.1f}",
+    f"{non_emoji_monthly_peak_month} ({non_emoji_monthly_peak_value})",
+    f"Q{non_emoji_quarterly_peak} ({non_emoji_quarterly_peak_value})"
+]
+
+# Create summary DataFrame and save to Excel
+summary_df = pd.DataFrame(summary_data)
+summary_excel = os.path.join(data_dir, 'emoji_vs_non_emoji_summary.xlsx')
+summary_df.to_excel(summary_excel, index=False)
+print(f"Comparative summary saved to: {summary_excel}")
+
+# Create a concise summary figure
+plt.figure(figsize=(12, 10))
+# Use a different approach for a table visualization - text-based table
+table_data = [[summary_data['Metric'][i], summary_data['Emoji Relevant'][i], summary_data['Irrelevant'][i]] 
+              for i in range(len(summary_data['Metric']))]
+table = plt.table(cellText=table_data, 
+                 colLabels=['Metric', 'Emoji Relevant', 'Irrelevant'],
+                 loc='center',
+                 cellLoc='center',
+                 colColours=['#d9d9d9', '#b3e0ff', '#ffcc99'])
+table.auto_set_font_size(False)
+table.set_fontsize(10)
+table.scale(1.2, 1.5)
+plt.axis('off')
+plt.title('Comparative Analysis: Emoji vs. Non-Emoji Documents', fontweight='bold', pad=20)
+
+plt.tight_layout()
+summary_file = os.path.join(summary_dir, 'emoji_vs_non_emoji_summary.png')
+plt.savefig(summary_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+# Create a final visualization - proportion of emoji documents over time with trend line
+plt.figure(figsize=(14, 8))
+
+# Convert emoji_by_year to DataFrame for easier manipulation
+emoji_trend_df = emoji_by_year.reset_index()
+emoji_trend_df = emoji_trend_df[['year', 'Emoji %', 'Emoji Relevant', 'Total']]
+
+# Create the bar chart
+ax1 = plt.subplot()
+total_bars = ax1.bar(emoji_trend_df['year'], emoji_trend_df['Total'], color='lightgray', label='Total Documents')
+emoji_bars = ax1.bar(emoji_trend_df['year'], emoji_trend_df['Emoji Relevant'], color='#1f77b4', label='Emoji Documents')
+
+# Add a trend line for emoji percentage
+ax2 = ax1.twinx()
+ax2.plot(emoji_trend_df['year'], emoji_trend_df['Emoji %'], 'ro-', linewidth=2, markersize=8, label='Emoji %')
+ax2.set_ylabel('Emoji Document Percentage (%)', color='red', fontweight='bold')
+ax2.tick_params(axis='y', labelcolor='red')
+ax2.grid(False)
+
+# Add percentage labels above the trend line
+for i, row in emoji_trend_df.iterrows():
+    if not np.isnan(row['Emoji %']):
+        ax2.annotate(f"{row['Emoji %']:.1f}%",
+                   xy=(row['year'], row['Emoji %']),
+                   xytext=(0, 5),
+                   textcoords='offset points',
+                   ha='center',
+                   fontsize=9,
+                   color='red',
+                   fontweight='bold')
+
+# Set up the primary y-axis and other formatting
+ax1.set_xlabel('Year', fontweight='bold')
+ax1.set_ylabel('Number of Documents', fontweight='bold')
+ax1.set_title('UTC Document Evolution: Total vs. Emoji-Related (2004-2023)', fontweight='bold', pad=20)
+ax1.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Create legends for both axes
+lines1, labels1 = ax1.get_legend_handles_labels()
+lines2, labels2 = ax2.get_legend_handles_labels()
+ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+plt.tight_layout()
+trends_summary_file = os.path.join(summary_dir, 'emoji_document_evolution.png')
+plt.savefig(trends_summary_file, dpi=300, bbox_inches='tight')
+plt.close()
+
+print("\nAnalysis Complete!")
+print(f"Analysis summary saved to: {summary_file}")
+print(f"Document evolution chart saved to: {trends_summary_file}")
+print(f"\nAll visualizations and data files have been generated in:")
+print(f"- Plots directory: {plots_dir}")
+print(f"- Data directory: {data_dir}")
+print(f"- Emoji analysis directory: {emoji_dir}")
+print("\nKey findings have been organized into the following categories:")
+print("1. Document distribution by category and subcategory")
+print("2. Source/contributor analysis")
+print("3. Time series and trend analysis")
+print("4. Emoji relevance analysis")
+print("5. Comparative analysis between emoji and non-emoji documents")
