@@ -207,7 +207,8 @@ for idx, row in df.iterrows():
             'date': date_,
             'year': year,
             'category': 'Others/Miscellaneous',
-            'subcategory': ''
+            'subcategory': '',
+            'emoji_relevance': row['emoji_relevance']  # Add emoji_relevance column
         })
         continue
 
@@ -223,7 +224,8 @@ for idx, row in df.iterrows():
                 'date': date_,
                 'year': year,
                 'category': cat,
-                'subcategory': ''
+                'subcategory': '',
+                'emoji_relevance': row['emoji_relevance']  # Add emoji_relevance column
             })
         else:
             for subcat in subcats:
@@ -235,7 +237,8 @@ for idx, row in df.iterrows():
                     'date': date_,
                     'year': year,
                     'category': cat,
-                    'subcategory': subcat
+                    'subcategory': subcat,
+                    'emoji_relevance': row['emoji_relevance']  # Add emoji_relevance column
                 })
 
 # Create the expanded DataFrame
@@ -688,7 +691,9 @@ ax = sns.barplot(
     x='count',
     y='category',
     data=emoji_category_counts.head(10),
-    palette='viridis'
+    hue='category',  # Add hue parameter
+    palette='viridis',
+    legend=False  # Hide the legend since it would be redundant
 )
 plt.title('Top 10 Categories for Emoji-Relevant Documents', fontweight='bold', pad=20)
 plt.xlabel('Number of Documents', fontweight='bold')
@@ -761,7 +766,9 @@ ax = sns.barplot(
     x='count',
     y='source',
     data=emoji_source_counts.head(10),
-    palette='plasma'
+    hue='source',  # Add hue parameter
+    palette='plasma',
+    legend=False  # Hide the legend since it would be redundant
 )
 plt.title('Top 10 Contributors to Emoji-Relevant Documents', fontweight='bold', pad=20)
 plt.xlabel('Number of Contributions', fontweight='bold')
@@ -902,7 +909,9 @@ for category in emoji_category_counts.head(10)['category']:
             x='count',
             y='subcategory',
             data=cat_subcats,
-            palette='viridis'
+            hue='subcategory',  # Add hue parameter
+            palette='viridis',
+            legend=False  # Hide the legend since it would be redundant
         )
         plt.title(f'Emoji-Relevant Documents: Subcategories of {category}', fontweight='bold', pad=20)
         plt.xlabel('Number of Documents', fontweight='bold')
@@ -1079,6 +1088,9 @@ plt.close()
 # Add month analysis for emoji documents
 df_emoji_expanded['month'] = df_emoji_expanded['date'].dt.month
 df_non_emoji_expanded['month'] = df_non_emoji_expanded['date'].dt.month
+
+df_emoji_expanded['quarter'] = df_emoji_expanded['date'].dt.quarter
+df_non_emoji_expanded['quarter'] = df_non_emoji_expanded['date'].dt.quarter
 
 # Compare monthly patterns of emoji vs non-emoji documents
 emoji_monthly = df_emoji_expanded.groupby('month').size()
