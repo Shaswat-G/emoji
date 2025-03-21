@@ -119,7 +119,7 @@ def classify_emoji_relevance(subject: str) -> str:
     """
     Classifies the input subject string into emjoi-relevant and other Unicode categories.
     """
-    classification = "Others/Miscellaneous"
+    classification = "Irrelevant"
     subject_lower = subject.lower()
     for category, keywords in unicode_docs_emoji_keywords.items():
         for keyword in keywords:
