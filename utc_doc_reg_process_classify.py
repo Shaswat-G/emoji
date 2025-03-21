@@ -4,6 +4,11 @@ import os
 import re
 
 
+unicode_docs_emoji_keywords = {
+    "Emoji Relevant": ["emoji", "emojis", "emoticon", "emoticons", "kaomoji", "afroji", "animoji",
+                       "emojipedia", "emojify", "emojification"]
+}
+
 unicode_docs_hierarchy_keywords_refined = {
     "Meeting Documents": {
         "Agendas": [
@@ -89,7 +94,7 @@ def match_keyword(subject: str, keyword: str) -> bool:
     pattern = r'(?<!\w)' + re.escape(keyword) + r'(?!\w)'
     return re.search(pattern, subject, re.IGNORECASE) is not None
 
-def classify_subject(subject: str) -> dict:
+def classify_document_type(subject: str) -> dict:
     """
     Classifies the input subject string into the hierarchical categories.
     
@@ -110,6 +115,19 @@ def classify_subject(subject: str) -> dict:
                     break
     return classification if classification else {"Others/Miscellaneous": []}
 
+def classify_emoji_relevance(subject: str) -> str:
+    """
+    Classifies the input subject string into emjoi-relevant and other Unicode categories.
+    """
+    classification = "Others/Miscellaneous"
+    subject_lower = subject.lower()
+    for category, keywords in unicode_docs_emoji_keywords.items():
+        for keyword in keywords:
+            if match_keyword(subject_lower, keyword):
+                classification = category
+                break
+    return classification
+
 if __name__ == "__main__":
     
     working_dir = os.getcwd()
@@ -120,6 +138,7 @@ if __name__ == "__main__":
     df.dropna(subset=['doc_num', 'source', 'date'], inplace=True)
     df.reset_index(drop=True, inplace=True)
     df['date'] = pd.to_datetime(df['date'], format='mixed')
-    df['doc_type'] = df['subject'].apply(classify_subject)
+    df['doc_type'] = df['subject'].apply(classify_document_type)
+    df['emoji_relevance'] = df['subject'].apply(classify_emoji_relevance)
     
     df.to_excel('utc_register_all_classified.xlsx', index=False)
