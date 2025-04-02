@@ -1,0 +1,3 @@
+HI. What details can you extract about what the follwing text is about? Your response should be a json object.
+
+{input_text}

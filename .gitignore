@@ -196,3 +196,5 @@ cython_debug/
 *.xlsx
 
 /plots
+
+api_key.txt
