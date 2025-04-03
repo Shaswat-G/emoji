@@ -263,8 +263,14 @@ def main():
     
     # Extract file extensions more robustly
     if 'file_extension' not in df.columns:
+        # Use np.nan for invalid URLs instead of None to work properly with notna()
         df["file_extension"] = df["doc_url"].apply(
-            lambda x: os.path.splitext(str(x))[1].lstrip('.') if isinstance(x, str) else None
+            lambda x: os.path.splitext(str(x))[1].lstrip('.') if isinstance(x, str) and x else np.nan
+        )
+        # Only allow valid extensions (convert empty strings and unsupported extensions to NaN)
+        valid_extensions = ['pdf', 'html', 'htm', 'txt']
+        df['file_extension'] = df['file_extension'].apply(
+            lambda ext: ext.lower() if isinstance(ext, str) and ext.lower() in valid_extensions else np.nan
         )
     
     # Initialize columns if they don't exist
@@ -274,7 +280,7 @@ def main():
             if col in ['is_emoji_relevant', 'file_size_kb']:
                 df[col] = 0
             elif col == 'error_message':
-                df[col] = ""
+                df[col] = np.nan  # Use NaN instead of empty string for unprocessed documents
             else:
                 df[col] = "[]"
     
@@ -285,8 +291,11 @@ def main():
     total_time = 0
     batch_size = 100
     
-    # Create mask for documents that need processing
-    to_process_mask = pd.notna(df['file_extension']) & ~(df['error_message'].notna() | (df['file_size_kb'] > 0))
+    # Create mask for documents that need processing - fix by checking for empty strings too
+    to_process_mask = pd.notna(df['file_extension']) & (
+        pd.isna(df['error_message']) | 
+        (df['error_message'] == "") & (df['file_size_kb'] == 0)
+    )
     to_process_indices = df[to_process_mask].index
     remaining_docs = len(to_process_indices)
     
