@@ -7,8 +7,6 @@ from bs4 import BeautifulSoup
 import PyPDF2
 import io
 import time
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 import emoji  # Add emoji library for detecting and handling emojis
 from tqdm import tqdm  # Import tqdm for progress bar
 
@@ -22,8 +20,6 @@ UNICODE_PATTERNS = [
 ]
 SHORTCODE_PATTERN = re.compile(r':([a-z0-9_\-+]+):')
 DOC_REF_PATTERN = re.compile(r'(L2/\d{2}[-‐–—−]\d{3})')
-
-stop_words = set(stopwords.words('english'))
 
 # Define comprehensive emoji-related keywords for relevance detection
 EMOJI_KEYWORDS = [
@@ -202,8 +198,7 @@ def main():
     output_dir = os.path.join(working_dir, "extracted_texts")
     os.makedirs(output_dir, exist_ok=True)
     
-    # Load dataframe (remove sample() in production)
-    df = pd.read_excel(file_path).sample(10)
+    df = pd.read_excel(file_path)
     
     # Extract file extensions more robustly
     df["file_extension"] = df["doc_url"].apply(

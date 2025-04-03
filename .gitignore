@@ -198,3 +198,4 @@ cython_debug/
 /plots
 
 api_key.txt
+extracted_texts/
