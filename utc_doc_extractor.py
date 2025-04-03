@@ -129,7 +129,11 @@ def extract_text_by_extension(content, extension):
     elif extension.lower() in ['html', 'htm']:
         return extract_text_from_html(content)
     elif extension.lower() == 'txt':
-        return content.decode('utf-8', errors='replace')
+        try:
+            return content.decode('utf-8', errors='replace')
+        except Exception as e:
+            print(f"Error decoding text content: {e}")
+            return ""
     else:
         print(f"Unsupported file extension: {extension}")
         return ""
@@ -140,56 +144,99 @@ def process_document(row, output_dir):
     doc_url = row['doc_url']
     extension = row['file_extension']
     
+    error_message = ""
+    
     if not isinstance(doc_url, str) or not extension:
-        print(f"Skipping {doc_num}: Missing URL or unknown file type")
-        return {}, None
+        error_message = "Missing URL or unknown file type"
+        print(f"Skipping {doc_num}: {error_message}")
+        return {"error_message": error_message}, None
     
-    # Extract year from doc_num (format: L2/YY-XXX)
-    match = re.search(r'L2/(\d{2})-\d+', str(doc_num))
-    if not match:
-        print(f"Could not extract year from {doc_num}")
-        return {}, None
+    try:
+        # Extract year from doc_num (format: L2/YY-XXX)
+        match = re.search(r'L2/(\d{2})-\d+', str(doc_num))
+        if not match:
+            error_message = f"Could not extract year from document number"
+            print(f"{error_message}: {doc_num}")
+            return {"error_message": error_message}, None
+        
+        year = match.group(1)
+        full_url = f"https://www.unicode.org/L2/L20{year}/{doc_url}"
+        
+        print(f"Downloading: {full_url}")
+        content = download_document(full_url)
+        if content is None:
+            error_message = "Failed to download document"
+            return {"error_message": error_message}, None
+        
+        # Extract and process text
+        text = extract_text_by_extension(content, extension)
+        if not text:
+            error_message = "No text extracted from document"
+            print(f"{error_message}: {doc_num}")
+            return {"error_message": error_message}, None
+        
+        processed_text = preprocess_text(text)
+        
+        # Save processed text to file with error handling
+        output_file = os.path.join(output_dir, f"{doc_num.replace('/', '_')}.txt")
+        try:
+            with open(output_file, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(processed_text)
+        except Exception as e:
+            error_message = f"Error writing text file: {str(e)}"
+            print(f"Warning - {error_message} for {doc_num}")
+            # Try again with a more aggressive error handling approach
+            try:
+                # Replace problematic characters
+                cleaned_text = ''.join(char if ord(char) < 0x10000 else '?' for char in processed_text)
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(cleaned_text)
+                error_message += " (Cleaned text was saved)"
+            except Exception as e2:
+                error_message += f" | Second attempt failed: {str(e2)}"
+                print(f"Failed to save text for {doc_num}: {e2}")
+                # Create an empty file as a placeholder
+                try:
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(f"Error processing document {doc_num}: {error_message}")
+                except:
+                    pass
+        
+        # Get file size in KB
+        try:
+            file_size_kb = os.path.getsize(output_file) / 1024
+        except:
+            file_size_kb = 0
+            error_message += " | Could not determine file size"
+        
+        # Analyze text for emoji relevance and references
+        try:
+            is_relevant, found_keywords = is_emoji_relevant(processed_text)
+            extracted_emojis = extract_emojis(processed_text)
+            doc_refs = extract_doc_refs(processed_text)
+        except Exception as e:
+            is_relevant, found_keywords = False, []
+            extracted_emojis = {'emoji_chars': [], 'unicode_points': [], 'emoji_shortcodes': []}
+            doc_refs = []
+            error_message += f" | Error analyzing text: {str(e)}"
+        
+        print(f"Successfully processed {doc_num} (Emoji Relevant: {is_relevant})")
+        
+        return {
+            'extracted_doc_refs': doc_refs,
+            'is_emoji_relevant': is_relevant,
+            'emoji_keywords_found': found_keywords,
+            'emoji_chars': extracted_emojis['emoji_chars'],
+            'unicode_points': extracted_emojis['unicode_points'],
+            'emoji_shortcodes': extracted_emojis['emoji_shortcodes'],
+            'file_size_kb': round(file_size_kb, 2),
+            'error_message': error_message
+        }, processed_text
     
-    year = match.group(1)
-    full_url = f"https://www.unicode.org/L2/L20{year}/{doc_url}"
-    
-    print(f"Downloading: {full_url}")
-    content = download_document(full_url)
-    if content is None:
-        return {}, None
-    
-    # Extract and process text
-    text = extract_text_by_extension(content, extension)
-    if not text:
-        print(f"No text extracted from {doc_num}")
-        return {}, None
-    
-    processed_text = preprocess_text(text)
-    
-    # Save processed text to file
-    output_file = os.path.join(output_dir, f"{doc_num.replace('/', '_')}.txt")
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(processed_text)
-    
-    # Get file size in KB
-    file_size_kb = os.path.getsize(output_file) / 1024
-    
-    # Analyze text for emoji relevance and references
-    is_relevant, found_keywords = is_emoji_relevant(processed_text)
-    extracted_emojis = extract_emojis(processed_text)
-    doc_refs = extract_doc_refs(processed_text)
-    
-    print(f"Successfully processed {doc_num} (Emoji Relevant: {is_relevant})")
-    
-    return {
-        'extracted_doc_refs': doc_refs,
-        'is_emoji_relevant': is_relevant,
-        'emoji_keywords_found': found_keywords,
-        'emoji_chars': extracted_emojis['emoji_chars'],
-        'unicode_points': extracted_emojis['unicode_points'],
-        'emoji_shortcodes': extracted_emojis['emoji_shortcodes'],
-        'file_size_kb': round(file_size_kb, 2)
-    }, processed_text
+    except Exception as e:
+        error_message = f"Unexpected error: {str(e)}"
+        print(f"Error processing {doc_num}: {error_message}")
+        return {"error_message": error_message}, None
 
 def main():
     working_dir = os.getcwd()
@@ -198,52 +245,126 @@ def main():
     output_dir = os.path.join(working_dir, "extracted_texts")
     os.makedirs(output_dir, exist_ok=True)
     
-    df = pd.read_excel(file_path)
+    # Output file paths
+    results_file = os.path.join(working_dir, "utc_register_with_text.xlsx")
+    checkpoint_file = os.path.join(working_dir, "utc_register_with_text_checkpoint.xlsx")
+    
+    # Check for existing results file to resume processing
+    if os.path.exists(results_file):
+        print(f"Found existing results file. Loading to continue processing...")
+        df = pd.read_excel(results_file)
+        # Find which documents have been processed
+        processed_mask = df['error_message'].notna() | (df['file_size_kb'] > 0)
+        processed_count = processed_mask.sum()
+        print(f"Already processed {processed_count} documents.")
+    else:
+        df = pd.read_excel(file_path)
+        processed_count = 0
     
     # Extract file extensions more robustly
-    df["file_extension"] = df["doc_url"].apply(
-        lambda x: os.path.splitext(str(x))[1].lstrip('.') if isinstance(x, str) else None
-    )
+    if 'file_extension' not in df.columns:
+        df["file_extension"] = df["doc_url"].apply(
+            lambda x: os.path.splitext(str(x))[1].lstrip('.') if isinstance(x, str) else None
+        )
     
-    # Initialize columns
-    df['extracted_doc_refs'] = "[]"
-    df['emoji_chars'] = "[]"
-    df['unicode_points'] = "[]"
-    df['is_emoji_relevant'] = False
-    df['emoji_keywords_found'] = "[]"
-    df['emoji_shortcodes'] = "[]"
-    df['file_size_kb'] = 0.0
+    # Initialize columns if they don't exist
+    for col in ['extracted_doc_refs', 'emoji_chars', 'unicode_points', 'is_emoji_relevant', 
+                'emoji_keywords_found', 'emoji_shortcodes', 'file_size_kb', 'error_message']:
+        if col not in df.columns:
+            if col in ['is_emoji_relevant', 'file_size_kb']:
+                df[col] = 0
+            elif col == 'error_message':
+                df[col] = ""
+            else:
+                df[col] = "[]"
     
     print("Starting text extraction...")
     
     # Calculate documents to process
     docs_to_process = df[pd.notna(df['file_extension'])].shape[0]
     total_time = 0
-    processed_count = 0
+    batch_size = 100
     
-    # Use tqdm for progress tracking
-    for i, row in tqdm(df.iterrows(), total=df.shape[0], desc="Processing documents"):
-        if pd.notna(row['file_extension']):
+    # Create mask for documents that need processing
+    to_process_mask = pd.notna(df['file_extension']) & ~(df['error_message'].notna() | (df['file_size_kb'] > 0))
+    to_process_indices = df[to_process_mask].index
+    remaining_docs = len(to_process_indices)
+    
+    print(f"Documents to process: {remaining_docs} out of {docs_to_process} total")
+    
+    # Process in batches
+    batch_num = 0
+    for batch_start in range(0, remaining_docs, batch_size):
+        batch_num += 1
+        batch_end = min(batch_start + batch_size, remaining_docs)
+        current_batch_indices = to_process_indices[batch_start:batch_end]
+        
+        print(f"\nProcessing batch {batch_num} ({batch_start+1}-{batch_end} of {remaining_docs})...")
+        
+        # Process the current batch
+        batch_processed = 0
+        
+        # Use tqdm for progress tracking within the batch
+        for i in tqdm(current_batch_indices, desc=f"Batch {batch_num}"):
+            row = df.loc[i]
             start_time = time.time()
             
-            results, _ = process_document(row, output_dir)
-            
-            end_time = time.time()
-            doc_time = end_time - start_time
-            total_time += doc_time
-            processed_count += 1
-            avg_time = total_time / processed_count
-            
-            if results:
-                for key, value in results.items():
-                    df.at[i, key] = value
-            
-            tqdm.write(f"Document {row['doc_num']} processed in {doc_time:.2f}s (Avg: {avg_time:.2f}s)")
-            time.sleep(1)  # Be polite to the server
+            try:
+                results, _ = process_document(row, output_dir)
+                
+                end_time = time.time()
+                doc_time = end_time - start_time
+                total_time += doc_time
+                batch_processed += 1
+                
+                if results:
+                    for key, value in results.items():
+                        df.at[i, key] = value
+                
+                tqdm.write(f"Document {row['doc_num']} processed in {doc_time:.2f}s")
+            except Exception as e:
+                df.at[i, 'error_message'] = f"Unhandled exception: {str(e)}"
+                tqdm.write(f"Error with document {row['doc_num']}: {e}")
+        
+        processed_count += batch_processed
+        
+        # Save checkpoint after each batch
+        try:
+            # First save to temporary file then rename to avoid corruption
+            df.to_excel(checkpoint_file, index=False)
+            if os.path.exists(results_file):
+                os.replace(checkpoint_file, results_file)  # Atomic replacement
+            else:
+                os.rename(checkpoint_file, results_file)
+            print(f"Checkpoint saved after batch {batch_num}. Total processed: {processed_count}/{docs_to_process}")
+        except Exception as e:
+            print(f"Error saving checkpoint: {e}")
+            # Try a backup save method
+            try:
+                backup_file = os.path.join(working_dir, f"utc_register_with_text_backup_batch{batch_num}.csv")
+                df.to_csv(backup_file, index=False, encoding='utf-8', errors='replace')
+                print(f"Backup CSV saved instead: {backup_file}")
+            except Exception as e2:
+                print(f"Could not save checkpoint: {e2}")
     
-    print(f"Processing completed. Average time per document: {total_time/processed_count:.2f}s")
-    df.to_excel(os.path.join(working_dir, "utc_register_with_text.xlsx"), index=False)
-    print("Text extraction completed.")
+    if processed_count > 0:
+        print(f"Processing completed. Average time per document: {total_time/processed_count:.2f}s")
+    else:
+        print("No documents were processed. All may have been processed already.")
+    
+    # Save final results
+    try:
+        df.to_excel(results_file, index=False)
+        print("Text extraction completed and results saved.")
+    except Exception as e:
+        print(f"Error saving final results: {e}")
+        # Try a backup save method
+        try:
+            df.to_csv(os.path.join(working_dir, "utc_register_with_text_backup_final.csv"), 
+                     index=False, encoding='utf-8', errors='replace')
+            print("Backup CSV saved instead.")
+        except:
+            print("Could not save results. Please check data for invalid characters.")
 
 if __name__ == "__main__":
     main()
