@@ -194,6 +194,8 @@ cython_debug/
 
 #files
 *.xlsx
+*.png
+
 
 /plots
 
