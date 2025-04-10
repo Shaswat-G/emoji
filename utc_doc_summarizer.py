@@ -10,6 +10,7 @@ from sumy.summarizers.lsa import LsaSummarizer
 from sumy.parsers.plaintext import PlaintextParser
 import re  # Add this import for regex
 import csv  # Add this import for CSV handling
+import numpy as np  # Add this import
 
 # Move function definitions here (outside the main block)
 def read_file_content(doc_num, folder_path):
@@ -90,6 +91,9 @@ def process_row(row_data):
 def remove_illegal_characters(text):
     """Remove characters that are not allowed in Excel worksheets with encoding checks."""
     if not isinstance(text, str):
+        # If it's a list or array, convert each element
+        if isinstance(text, (list, np.ndarray, pd.Series)):
+            return [remove_illegal_characters(str(item)) for item in text]
         return text
         
     # Try to re-encode as UTF-8 to catch any encoding issues
@@ -104,7 +108,16 @@ def remove_illegal_characters(text):
 def save_to_csv(df, file_path):
     """Save DataFrame to CSV with UTF-8 encoding."""
     try:
-        df.to_csv(file_path, index=False, encoding='utf-8', quoting=csv.QUOTE_ALL)
+        # Create a copy to avoid modifying the original dataframe
+        save_df = df.copy()
+        
+        # Convert all complex objects to strings for CSV
+        for col in save_df.columns:
+            save_df[col] = save_df[col].apply(
+                lambda x: str(x) if x is not None else None
+            )
+            
+        save_df.to_csv(file_path, index=False, encoding='utf-8', quoting=csv.QUOTE_ALL)
         return True
     except Exception as e:
         print(f"Error saving to CSV: {str(e)}")
@@ -113,14 +126,27 @@ def save_to_csv(df, file_path):
 def safe_save_to_excel(df, file_path, csv_backup=True):
     """Try to save to Excel, fall back to CSV if it fails."""
     try:
+        # Create a copy to avoid modifying the original dataframe
+        save_df = df.copy()
+        
         # Sanitize all text columns
-        text_columns = ["text", "rake_keywords", "yake_keywords", "lsa_summary", "processing_error"]
+        print("Sanitizing data before saving...")
+        text_columns = ["text", "lsa_summary", "processing_error"]
         for col in text_columns:
-            if col in df.columns:
-                df[col] = df[col].apply(lambda x: remove_illegal_characters(str(x)) if pd.notnull(x) else x)
+            if col in save_df.columns:
+                save_df[col] = save_df[col].apply(lambda x: remove_illegal_characters(x) if x is not None else None)
+        
+        # Handle list/array columns separately
+        list_columns = ["rake_keywords", "yake_keywords"]
+        for col in list_columns:
+            if col in save_df.columns:
+                # Convert lists to strings for Excel compatibility
+                save_df[col] = save_df[col].apply(
+                    lambda x: str(remove_illegal_characters(x)) if x is not None else None
+                )
         
         # Try to save as Excel
-        df.to_excel(file_path, index=False, engine='openpyxl')
+        save_df.to_excel(file_path, index=False, engine='openpyxl')
         print(f"Successfully saved to Excel: {file_path}")
         return True
     except Exception as e:
