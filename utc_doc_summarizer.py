@@ -3,56 +3,52 @@ import yake
 import pandas as pd
 from rake_nltk import Rake
 import concurrent.futures
+import multiprocessing
 from tqdm import tqdm
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
 from sumy.parsers.plaintext import PlaintextParser
+import re  # Add this import for regex
+import csv  # Add this import for CSV handling
 
-base_path = os.getcwd()
-folder_name = "extracted_texts"
-folder_path = os.path.join(base_path, folder_name)
-
-file_name = "utc_register_with_text.xlsx"
-file_path = os.path.join(base_path, file_name)
-
-df = pd.read_excel(file_path)  # Process all rows, not just sample
-# df = df.sample(5)  # Remove sampling for production
-
-df["rake_keywords"] = None
-df["yake_keywords"] = None
-df["lsa_summary"] = None
-df["processing_error"] = None  # New column for processing errors
-
+# Move function definitions here (outside the main block)
 def read_file_content(doc_num, folder_path):
     doc_num = doc_num.replace("/", "_")
     file_path = os.path.join(folder_path, f"{doc_num}.txt")
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
-    except:
+    except Exception as e:
         return ""
 
 def get_rake_keywords(text, proportion=0.01):
+    if not text or len(text.strip()) == 0:
+        return []
     rake = Rake()
     rake.extract_keywords_from_text(text)
     keywords = rake.get_ranked_phrases()
-    return keywords[:int(len(keywords) * proportion)]
+    return keywords[:int(max(1, len(keywords) * proportion))]
 
 def get_yake_keywords(text, proportion=0.01):
+    if not text or len(text.strip()) == 0:
+        return []
     yake_ext = yake.KeywordExtractor(lan="en", n=3)
     keywords = yake_ext.extract_keywords(text)
-    return keywords[:int(len(keywords) * proportion)]
+    return keywords[:int(max(1, len(keywords) * proportion))]
 
 def get_lsa_summary(text, sentences_count=5):
+    if not text or len(text.strip()) == 0:
+        return ""
     parser = PlaintextParser.from_string(text, Tokenizer("english"))
     summarizer = LsaSummarizer()
-    summary = summarizer(parser.document, sentences_count=sentences_count)
+    summary = summarizer(parser.document, sentences_count=min(sentences_count, len(parser.document.sentences)))
     return " ".join(str(sentence) for sentence in summary)
 
-def process_row(row):
+def process_row(row_data):
     """Process a single row with error handling"""
+    idx, row = row_data
     result = {
-        "idx": row.name,
+        "idx": idx,
         "text": "",
         "rake_keywords": None,
         "yake_keywords": None, 
@@ -91,44 +87,114 @@ def process_row(row):
     
     return result
 
-def process_batch(batch_df):
-    """Process a batch of rows in parallel"""
-    results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-        futures = [executor.submit(process_row, row) for _, row in batch_df.iterrows()]
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                results.append(future.result())
-            except Exception as e:
-                print(f"A worker process failed: {str(e)}")
-    return results
-
-# Process in batches
-batch_size = 100
-total_rows = len(df)
-num_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
-
-print(f"Processing {total_rows} rows in {num_batches} batches...")
-
-for i in tqdm(range(0, total_rows, batch_size)):
-    batch_df = df.iloc[i:min(i+batch_size, total_rows)]
-    batch_results = process_batch(batch_df)
+def remove_illegal_characters(text):
+    """Remove characters that are not allowed in Excel worksheets with encoding checks."""
+    if not isinstance(text, str):
+        return text
+        
+    # Try to re-encode as UTF-8 to catch any encoding issues
+    try:
+        text = text.encode('utf-8', errors='replace').decode('utf-8')
+    except Exception:
+        text = str(text.encode('ascii', errors='replace').decode('ascii'))
     
-    # Update the main dataframe with the batch results
-    for result in batch_results:
-        idx = result["idx"]
-        df.at[idx, "text"] = result["text"]
-        df.at[idx, "rake_keywords"] = result["rake_keywords"]
-        df.at[idx, "yake_keywords"] = result["yake_keywords"]
-        df.at[idx, "lsa_summary"] = result["lsa_summary"]
-        df.at[idx, "processing_error"] = result["processing_error"]
-    
-    # Save intermediate results every 5 batches
-    if (i // batch_size) % 5 == 0 and i > 0:
-        interim_file_name = f"utc_register_with_text_and_summary_interim_{i}.xlsx"
-        df.to_excel(os.path.join(base_path, interim_file_name), index=False)
-        print(f"Saved interim results to {interim_file_name}")
+    # Remove control characters and other problematic characters for Excel
+    return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]", "", text)
 
-output_file_name = "utc_register_with_text_and_summary.xlsx"
-df.to_excel(os.path.join(base_path, output_file_name), index=False)
-print(f"Processing complete. Results saved to {output_file_name}")
+def save_to_csv(df, file_path):
+    """Save DataFrame to CSV with UTF-8 encoding."""
+    try:
+        df.to_csv(file_path, index=False, encoding='utf-8', quoting=csv.QUOTE_ALL)
+        return True
+    except Exception as e:
+        print(f"Error saving to CSV: {str(e)}")
+        return False
+
+def safe_save_to_excel(df, file_path, csv_backup=True):
+    """Try to save to Excel, fall back to CSV if it fails."""
+    try:
+        # Sanitize all text columns
+        text_columns = ["text", "rake_keywords", "yake_keywords", "lsa_summary", "processing_error"]
+        for col in text_columns:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: remove_illegal_characters(str(x)) if pd.notnull(x) else x)
+        
+        # Try to save as Excel
+        df.to_excel(file_path, index=False, engine='openpyxl')
+        print(f"Successfully saved to Excel: {file_path}")
+        return True
+    except Exception as e:
+        print(f"Error saving to Excel: {str(e)}")
+        if csv_backup:
+            csv_path = file_path.replace('.xlsx', '.csv')
+            if save_to_csv(df, csv_path):
+                print(f"Saved backup to CSV: {csv_path}")
+                return True
+        return False
+
+# Main execution block
+if __name__ == "__main__":
+    # Add freeze_support for Windows
+    multiprocessing.freeze_support()
+    
+    base_path = os.getcwd()
+    folder_name = "extracted_texts"
+    folder_path = os.path.join(base_path, folder_name)
+    
+    file_name = "utc_register_with_text.xlsx"
+    file_path = os.path.join(base_path, file_name)
+    
+    print("Loading data...")
+    df = pd.read_excel(file_path)  # Process all rows
+    
+    df["rake_keywords"] = None
+    df["yake_keywords"] = None
+    df["lsa_summary"] = None
+    df["processing_error"] = None
+    
+    batch_size = 50  # Smaller batch size
+    total_rows = len(df)
+    num_batches = (total_rows + batch_size - 1) // batch_size
+    
+    print(f"Processing {total_rows} rows in {num_batches} batches...")
+    
+    # Use ThreadPoolExecutor instead of ProcessPoolExecutor
+    for i in tqdm(range(0, total_rows, batch_size)):
+        batch_end = min(i+batch_size, total_rows)
+        batch_df = df.iloc[i:batch_end]
+        
+        # Create list of (idx, row) pairs
+        row_data = [(idx, row) for idx, row in batch_df.iterrows()]
+        
+        # Process rows with ThreadPoolExecutor
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(process_row, rd) for rd in row_data]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    results.append(future.result())
+                except Exception as e:
+                    print(f"A worker thread failed: {str(e)}")
+        
+        # Update the main dataframe with the batch results
+        for result in results:
+            idx = result["idx"]
+            df.at[idx, "text"] = result["text"]
+            df.at[idx, "rake_keywords"] = result["rake_keywords"]
+            df.at[idx, "yake_keywords"] = result["yake_keywords"]
+            df.at[idx, "lsa_summary"] = result["lsa_summary"]
+            df.at[idx, "processing_error"] = result["processing_error"]
+        
+        # Save intermediate results every 5 batches
+        if (i // batch_size) % 5 == 0 and i > 0:
+            interim_file_name = f"utc_register_with_text_and_summary_interim_{i}.xlsx"
+            interim_path = os.path.join(base_path, interim_file_name)
+            safe_save_to_excel(df, interim_path)
+    
+    # Save final results
+    output_file_name = "utc_register_with_text_and_summary.xlsx"
+    output_path = os.path.join(base_path, output_file_name)
+    if safe_save_to_excel(df, output_path):
+        print(f"Processing complete. Results saved successfully.")
+    else:
+        print(f"Processing complete but encountered issues saving results.")
