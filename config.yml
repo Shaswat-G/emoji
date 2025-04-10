@@ -1,6 +1,4 @@
 # Paths
-input_path: "input.txt"
-output_path: "output.txt"
 prompt_path: "prompt.txt"
 api_key_path: "api_key.txt"
 

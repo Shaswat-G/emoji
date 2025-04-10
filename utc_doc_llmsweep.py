@@ -229,20 +229,17 @@ def safe_save_to_excel(df, file_path, csv_backup=True):
                 return True
         return False
 
-# Main execution
+
 if __name__ == "__main__":
-    # Add freeze_support for Windows
+
     multiprocessing.freeze_support()
-    
-    # Load configuration
+
     config = load_config()
     api_key = load_api_key(config["api_key_path"])
     prompt_template = load_file(config["prompt_path"])
     
-    # Initialize the OpenAI client once before processing
     client = OpenAI(api_key=api_key)
     
-    # Set up paths
     base_path = os.getcwd()
     folder_name = "extracted_texts"
     folder_path = os.path.join(base_path, folder_name)
@@ -253,20 +250,18 @@ if __name__ == "__main__":
     print("Loading data...")
     df = pd.read_excel(file_path)
     
-    # Initialize new columns for results (excluding text storage)
-    df["emoji_relevant"] = False  # New field from prompt.txt
+    df["emoji_relevant"] = False
     df["people"] = None
     df["emoji_references"] = None
     df["entities"] = None
     df["summary"] = None
     df["description"] = None
-    df["other_details"] = None  # New field from prompt.txt
+    df["other_details"] = None
     df["processing_error"] = None
     df["token_usage"] = None
     df["api_cost"] = 0.0
     
-    # Process in batches with parallel execution
-    batch_size = 10  # Smaller batch due to API rate limits
+    batch_size = 10
     total_rows = len(df)
     num_batches = (total_rows + batch_size - 1) // batch_size
     
