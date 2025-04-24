@@ -5,6 +5,7 @@ import mailbox
 from email.utils import parsedate_to_datetime
 import pandas as pd
 import re
+import numpy as np  # Needed for array type checking
 
 BASE_URL = "https://corp.unicode.org/pipermail/unicode/"
 ARCHIVES_DIR = "archives"
@@ -119,6 +120,24 @@ def extract_email_features(msg):
     return features
 
 
+def remove_illegal_characters(text):
+    """Remove characters that are not allowed in Excel worksheets with encoding checks."""
+    if not isinstance(text, str):
+        # If it's a list or array, convert each element
+        if isinstance(text, (list, np.ndarray, pd.Series)):
+            return [remove_illegal_characters(str(item)) for item in text]
+        return text
+
+    # Try to re-encode as UTF-8 to catch any encoding issues
+    try:
+        text = text.encode("utf-8", errors="replace").decode("utf-8")
+    except Exception:
+        text = str(text.encode("ascii", errors="replace").decode("ascii"))
+
+    # Remove control characters and other problematic characters for Excel
+    return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]", "", text)
+
+
 def find_root(msg, by_id):
     parent = msg.get("In-Reply-To")
     seen = set()
@@ -150,6 +169,10 @@ def process_mbox(mbox_path):
                 "mbox_file": os.path.basename(mbox_path),
             }
         )
+        # Sanitize all string fields in features
+        for k, v in features.items():
+            if isinstance(v, str) or isinstance(v, (list, np.ndarray, pd.Series)):
+                features[k] = remove_illegal_characters(v)
         rows.append(features)
     return rows
 
@@ -165,6 +188,10 @@ def main():
         df = pd.DataFrame(rows)
         sort_cols = ["thread_id", "date"] if "date" in df.columns else ["thread_id"]
         df.sort_values(sort_cols, inplace=True)
+        # Sanitize all string columns in DataFrame before saving
+        for col in df.columns:
+            if df[col].dtype == object:
+                df[col] = df[col].apply(remove_illegal_characters)
         excel_name = os.path.splitext(os.path.basename(mbox_path))[0] + ".xlsx"
         excel_path = os.path.join(PARSED_EXCEL_DIR, excel_name)
         df.to_excel(excel_path, index=False)

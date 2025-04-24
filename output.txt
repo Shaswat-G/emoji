@@ -1,6 +1,0 @@
-{
-  "name": "Shaswat Gupta",
-  "institution": "ETH Zurich",
-  "group": "TIM group",
-  "career_goal": "ML engineer"
-}
