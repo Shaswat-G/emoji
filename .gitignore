@@ -203,3 +203,5 @@ cython_debug/
 api_key.txt
 extracted_texts/
 email-archive/
+parsed_excels/
+archives/
