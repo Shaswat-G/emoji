@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import re
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import unicodedata
 
 # Setup logging
 log_path = os.path.join(os.getcwd(), "email_extraction.log")
@@ -19,6 +20,24 @@ logging.basicConfig(
 class EmailExtractor:
     def __init__(self, base_url):
         self.base_url = base_url
+        
+    @staticmethod
+    def sanitize_text(text):
+        """Clean text to avoid Unicode encoding issues"""
+        if not text or not isinstance(text, str):
+            return text
+            
+        try:
+            # Normalize Unicode (NFC form tends to work best)
+            text = unicodedata.normalize('NFC', text)
+            
+            # Remove or replace problematic characters
+            # Replace surrogate pairs with replacement character
+            text = text.encode('utf-8', errors='replace').decode('utf-8')
+            return text
+        except Exception:
+            # If all else fails, return a safe string
+            return "[Encoding Error]"
 
     def extract_email_from_soup(self, soup):
         # Extract metadata from HTML head
@@ -256,13 +275,13 @@ def main():
         email_archive_path, sheet_name="mail_archive_old_format"
     )
     year_mask = (email_archive["year"] >= 2001) & (email_archive["year"] <= 2013)
-    masked_email_archive = email_archive[year_mask].reset_index(drop=True).sample(10)
+    masked_email_archive = email_archive[year_mask].reset_index(drop=True)
 
     base_url = "https://www.unicode.org/mail-arch/unicode-ml/"
     extractor = EmailExtractor(base_url)
     expanded_df = extractor.process_archive(masked_email_archive, max_workers=8)
 
-    output_path = os.path.join(base_path, "trial_extraction.xlsx")
+    output_path = os.path.join(base_path, "utc_email_old_archive_parsed.xlsx")
     expanded_df.to_excel(output_path, index=False, engine="openpyxl")
 
 
