@@ -20,20 +20,20 @@ logging.basicConfig(
 class EmailExtractor:
     def __init__(self, base_url):
         self.base_url = base_url
-        
+
     @staticmethod
     def sanitize_text(text):
         """Clean text to avoid Unicode encoding issues"""
         if not text or not isinstance(text, str):
             return text
-            
+
         try:
             # Normalize Unicode (NFC form tends to work best)
-            text = unicodedata.normalize('NFC', text)
-            
+            text = unicodedata.normalize("NFC", text)
+
             # Remove or replace problematic characters
             # Replace surrogate pairs with replacement character
-            text = text.encode('utf-8', errors='replace').decode('utf-8')
+            text = text.encode("utf-8", errors="replace").decode("utf-8")
             return text
         except Exception:
             # If all else fails, return a safe string
@@ -188,19 +188,21 @@ class EmailExtractor:
             message_body = re.sub(r"<!--nospam-->", "", message_body)
             message_body = re.sub(r"<[^>]+>", "", message_body)
 
+        # Sanitize all extracted fields
+        sanitize = self.sanitize_text
         email_message = {
-            "subject": (subject or title).strip(),
-            "from": (from_address or author.replace("_at_", "@")).strip(),
-            "from_name": from_name.strip(),
-            "to": to_address.strip(),
-            "cc": cc_address.strip(),
-            "bcc": bcc_address.strip(),
-            "date": date.strip(),
-            "received": received.strip(),
-            "message_id": message_id.strip(),
-            "in_reply_to": in_reply_to.strip(),
-            "references": references.strip(),
-            "body": message_body.strip(),
+            "subject": sanitize((subject or title).strip()),
+            "from": sanitize((from_address or author.replace("_at_", "@")).strip()),
+            "from_name": sanitize(from_name.strip()),
+            "to": sanitize(to_address.strip()),
+            "cc": sanitize(cc_address.strip()),
+            "bcc": sanitize(bcc_address.strip()),
+            "date": sanitize(date.strip()),
+            "received": sanitize(received.strip()),
+            "message_id": sanitize(message_id.strip()),
+            "in_reply_to": sanitize(in_reply_to.strip()),
+            "references": sanitize(references.strip()),
+            "body": sanitize(message_body.strip()),
             # Optionally add more headers if needed
         }
         return email_message
