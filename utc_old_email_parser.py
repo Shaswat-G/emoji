@@ -39,6 +39,121 @@ class EmailExtractor:
             # If all else fails, return a safe string
             return "[Encoding Error]"
 
+    def extract_email_from_hypermail_215_soup(self, soup):
+        """
+        Extract email fields from hypermail 2.1.5 HTML structure.
+        """
+        # Extract meta info from <meta> tags
+        title = soup.title.text.strip() if soup.title else ""
+        meta_author = soup.find("meta", {"name": "Author"})
+        author = meta_author["content"] if meta_author else ""
+        meta_subject = soup.find("meta", {"name": "Subject"})
+        subject = meta_subject["content"] if meta_subject else ""
+        meta_date = soup.find("meta", {"name": "Date"})
+        date_str = meta_date["content"] if meta_date else ""
+
+        # Extract from <p> block at the top
+        p_blocks = soup.find_all("p")
+        from_addr = ""
+        from_name = ""
+        date = ""
+        body = ""
+        if p_blocks:
+            # The first <p> contains From and Date
+            p_html = str(p_blocks[0])
+            # From
+            from_match = re.search(r'<strong>From:</strong>\s*(.*?)\(<a href="mailto:([^"]+)"', p_html, re.DOTALL)
+            if from_match:
+                from_name = from_match.group(1).strip()
+                # Only extract email before '?'
+                from_addr_full = from_match.group(2).strip()
+                from_addr = from_addr_full.split("?")[0]
+            else:
+                # fallback: just get email
+                email_match = re.search(r'<a href="mailto:([^"]+)"', p_html)
+                if email_match:
+                    from_addr_full = email_match.group(1).strip()
+                    from_addr = from_addr_full.split("?")[0]
+            # Date
+            date_match = re.search(r'<strong>Date:</strong>\s*([^<]+)', p_html)
+            if date_match:
+                date = date_match.group(1).strip()
+            else:
+                date = date_str
+
+        # Message body: after <!-- body="start" --> and before <!-- body="end" -->
+        html = str(soup)
+        body_match = re.search(r'<!-- body="start" -->(.*?)<!-- body="end" -->', html, re.DOTALL | re.IGNORECASE)
+        to_addr = ""
+        cc_addr = ""
+        bcc_addr = ""
+        if body_match:
+            body_html = body_match.group(1)
+            # Remove <br/> to newlines, remove tags, unescape HTML entities
+            body_html = re.sub(r'<br\s*/?>', '\n', body_html)
+            body_html = re.sub(r'<[^>]+>', '', body_html)
+            body_html = re.sub(r'&nbsp;', ' ', body_html)
+            body_html = re.sub(r'&lt;', '<', body_html)
+            body_html = re.sub(r'&gt;', '>', body_html)
+            body_html = re.sub(r'&amp;', '&', body_html)
+            body_lines = [line.strip() for line in body_html.strip().splitlines()]
+            # Separate quoted conversation and main reply, interleaved
+            reformatted_lines = []
+            prev_quote_level = None
+            for line in body_lines:
+                stripped = line.lstrip()
+                quote_level = 0
+                while quote_level < len(stripped) and stripped[quote_level] == '>':
+                    quote_level += 1
+                content = stripped[quote_level:].lstrip()
+                if quote_level > 0:
+                    if prev_quote_level != quote_level:
+                        reformatted_lines.append(f"[Quote level {quote_level}]")
+                    reformatted_lines.append(stripped)
+                else:
+                    if prev_quote_level and prev_quote_level > 0:
+                        reformatted_lines.append("[End quote]")
+                    reformatted_lines.append(content)
+                prev_quote_level = quote_level if quote_level > 0 else 0
+            if prev_quote_level and prev_quote_level > 0:
+                reformatted_lines.append("[End quote]")
+            body = "\n".join(reformatted_lines).strip()
+
+        # Message-ID, In-Reply-To, References from HTML comments
+        message_id = ""
+        references = ""
+        # Find all HTML comments
+        comments = re.findall(r'<!--\s*([^>]+?)\s*-->', html)
+        for comment in comments:
+            # id
+            id_match = re.search(r'id="([^"]+)"', comment)
+            if id_match:
+                message_id = id_match.group(1)
+            # references
+            ref_match = re.search(r'references="([^"]+)"', comment)
+            if ref_match:
+                references = ref_match.group(1)
+        # Do not extract in_reply_to if it's just a thread hash (skip)
+
+        received = ""
+
+        sanitize = self.sanitize_text
+        email_message = {
+            "subject": sanitize((subject or title).strip()),
+            "from": sanitize(from_addr.replace("_at_", "@")),
+            "from_name": sanitize(from_name.strip()),
+            "to": sanitize(to_addr.strip()),
+            "cc": sanitize(cc_addr.strip()),
+            "bcc": sanitize(bcc_addr.strip()),
+            "date": sanitize(date.strip()),
+            "received": sanitize(received.strip()),
+            "message_id": sanitize(message_id.strip()),
+            "in_reply_to": "",  # skip thread hash
+            "references": sanitize(references.strip()),
+            "body": sanitize(body.strip()),
+        }
+        return email_message
+
     def extract_email_from_soup(self, soup):
         # Extract metadata from HTML head
         title = soup.title.text.strip() if soup.title else ""
@@ -188,6 +303,32 @@ class EmailExtractor:
             message_body = re.sub(r"<!--nospam-->", "", message_body)
             message_body = re.sub(r"<[^>]+>", "", message_body)
 
+        # --- Improved: Interleave quoted and main content, add quote level cues ---
+        if message_body:
+            lines = [line.rstrip() for line in message_body.splitlines()]
+            reformatted_lines = []
+            prev_quote_level = None
+            for line in lines:
+                stripped = line.lstrip()
+                # Count quote level
+                quote_level = 0
+                while quote_level < len(stripped) and stripped[quote_level] == '>':
+                    quote_level += 1
+                content = stripped[quote_level:].lstrip()
+                if quote_level > 0:
+                    # Add a cue if quote level changes
+                    if prev_quote_level != quote_level:
+                        reformatted_lines.append(f"[Quote level {quote_level}]")
+                    reformatted_lines.append(stripped)
+                else:
+                    if prev_quote_level and prev_quote_level > 0:
+                        reformatted_lines.append("[End quote]")
+                    reformatted_lines.append(content)
+                prev_quote_level = quote_level if quote_level > 0 else 0
+            if prev_quote_level and prev_quote_level > 0:
+                reformatted_lines.append("[End quote]")
+            message_body = "\n".join(reformatted_lines).strip()
+
         # Sanitize all extracted fields
         sanitize = self.sanitize_text
         email_message = {
@@ -232,8 +373,16 @@ class EmailExtractor:
             response = requests.get(email_url, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
+            # --- Check for hypermail 2.1.5 for year 2011 ---
+            is_2011 = int(row["year"]) == 2011
+            meta_generator = soup.find("meta", {"name": "generator"})
+            generator_content = meta_generator["content"] if meta_generator else ""
+            is_hypermail_215 = "hypermail 2.1.5" in generator_content.lower()
             try:
-                email_message = self.extract_email_from_soup(soup)
+                if is_2011 and is_hypermail_215:
+                    email_message = self.extract_email_from_hypermail_215_soup(soup)
+                else:
+                    email_message = self.extract_email_from_soup(soup)
                 if email_message:
                     return {**row.to_dict(), **email_message, "error": ""}
                 else:
@@ -271,21 +420,21 @@ class EmailExtractor:
 
 
 def main():
+
     base_path = os.getcwd()
     email_archive_path = os.path.join(base_path, "mail_archive_old_format.xlsx")
-    email_archive = pd.read_excel(
-        email_archive_path, sheet_name="mail_archive_old_format"
-    )
-    year_mask = (email_archive["year"] >= 2001) & (email_archive["year"] <= 2013)
+
+    email_archive = pd.read_excel(email_archive_path, sheet_name="mail_archive_old_format")
+    # year_mask = (email_archive["year"] >= 2001) & (email_archive["year"] <= 2013)
+    year_mask = (email_archive["year"] == 2011) & (email_archive["month"] == 6)
     masked_email_archive = email_archive[year_mask].reset_index(drop=True)
 
     base_url = "https://www.unicode.org/mail-arch/unicode-ml/"
     extractor = EmailExtractor(base_url)
     expanded_df = extractor.process_archive(masked_email_archive, max_workers=8)
 
-    output_path = os.path.join(base_path, "utc_email_old_archive_parsed.xlsx")
+    output_path = os.path.join(base_path, "utc_email_old_archive_testing.xlsx")
     expanded_df.to_excel(output_path, index=False, engine="openpyxl")
-
 
 if __name__ == "__main__":
     main()
