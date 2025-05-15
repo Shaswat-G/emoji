@@ -97,7 +97,7 @@ class EmailExtractor:
             body_html = re.sub(r'&gt;', '>', body_html)
             body_html = re.sub(r'&amp;', '&', body_html)
             body_lines = [line.strip() for line in body_html.strip().splitlines()]
-            # Group consecutive quoted lines into single quote blocks
+            # Group consecutive quoted lines (even if separated by blank lines)
             reformatted_lines = []
             prev_quote_level = 0
             quote_buffer = []
@@ -106,25 +106,19 @@ class EmailExtractor:
                 quote_level = 0
                 while quote_level < len(stripped) and stripped[quote_level] == '>':
                     quote_level += 1
-                content = stripped[quote_level:].lstrip()
-                if quote_level > 0:
-                    if prev_quote_level == quote_level or prev_quote_level == 0:
-                        quote_buffer.append(stripped)
-                    else:
-                        if quote_buffer:
-                            reformatted_lines.append(f"[Quote level {prev_quote_level}]")
-                            reformatted_lines.extend(quote_buffer)
-                            reformatted_lines.append("[End quote]")
-                            quote_buffer = [stripped]
-                    prev_quote_level = quote_level
-                else:
-                    if prev_quote_level > 0 and quote_buffer:
-                        reformatted_lines.append(f"[Quote level {prev_quote_level}]")
-                        reformatted_lines.extend(quote_buffer)
-                        reformatted_lines.append("[End quote]")
-                        quote_buffer = []
-                    reformatted_lines.append(content)
-                    prev_quote_level = 0
+                is_blank = (stripped == "")
+                if quote_level > 0 or (is_blank and prev_quote_level > 0 and quote_buffer):
+                    if quote_level > 0 or is_blank:
+                        quote_buffer.append(line)
+                        prev_quote_level = quote_level if quote_level > 0 else prev_quote_level
+                        continue
+                if prev_quote_level > 0 and quote_buffer:
+                    reformatted_lines.append(f"[Quote level {prev_quote_level}]")
+                    reformatted_lines.extend(quote_buffer)
+                    reformatted_lines.append("[End quote]")
+                    quote_buffer = []
+                reformatted_lines.append(line)
+                prev_quote_level = 0
             if prev_quote_level > 0 and quote_buffer:
                 reformatted_lines.append(f"[Quote level {prev_quote_level}]")
                 reformatted_lines.extend(quote_buffer)
@@ -315,7 +309,7 @@ class EmailExtractor:
             message_body = re.sub(r"<!--nospam-->", "", message_body)
             message_body = re.sub(r"<[^>]+>", "", message_body)
 
-        # --- Improved: Group consecutive quoted lines into single quote blocks ---
+        # --- Improved: Group consecutive quoted lines (even if separated by blank lines) ---
         if message_body:
             lines = [line.rstrip() for line in message_body.splitlines()]
             reformatted_lines = []
@@ -327,26 +321,21 @@ class EmailExtractor:
                 quote_level = 0
                 while quote_level < len(stripped) and stripped[quote_level] == '>':
                     quote_level += 1
-                content = stripped[quote_level:].lstrip()
-                if quote_level > 0:
-                    if prev_quote_level == quote_level or prev_quote_level == 0:
-                        quote_buffer.append(stripped)
-                    else:
-                        # End previous quote block
-                        if quote_buffer:
-                            reformatted_lines.append(f"[Quote level {prev_quote_level}]")
-                            reformatted_lines.extend(quote_buffer)
-                            reformatted_lines.append("[End quote]")
-                            quote_buffer = [stripped]
-                    prev_quote_level = quote_level
-                else:
-                    if prev_quote_level > 0 and quote_buffer:
-                        reformatted_lines.append(f"[Quote level {prev_quote_level}]")
-                        reformatted_lines.extend(quote_buffer)
-                        reformatted_lines.append("[End quote]")
-                        quote_buffer = []
-                    reformatted_lines.append(content)
-                    prev_quote_level = 0
+                is_blank = (stripped == "")
+                if quote_level > 0 or (is_blank and prev_quote_level > 0 and quote_buffer):
+                    # If blank line inside a quote block, keep it in the buffer
+                    if quote_level > 0 or is_blank:
+                        quote_buffer.append(line)
+                        prev_quote_level = quote_level if quote_level > 0 else prev_quote_level
+                        continue
+                # If we reach here, it's a non-quote line or end of quote block
+                if prev_quote_level > 0 and quote_buffer:
+                    reformatted_lines.append(f"[Quote level {prev_quote_level}]")
+                    reformatted_lines.extend(quote_buffer)
+                    reformatted_lines.append("[End quote]")
+                    quote_buffer = []
+                reformatted_lines.append(line)
+                prev_quote_level = 0
             # Flush any remaining quote buffer
             if prev_quote_level > 0 and quote_buffer:
                 reformatted_lines.append(f"[Quote level {prev_quote_level}]")
