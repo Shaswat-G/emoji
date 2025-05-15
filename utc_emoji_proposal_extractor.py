@@ -43,3 +43,15 @@ output_path = os.path.join(base_path, file_name)
 
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(emoji_list, f, ensure_ascii=False, indent=2)
+
+# Also save as CSV (excluding the Emoji Image column)
+import pandas as pd
+
+emoji_proposal_df = pd.DataFrame(emoji_list)
+if "Emoji Image" in emoji_proposal_df.columns:
+    emoji_proposal_df = emoji_proposal_df.drop(columns=["Emoji Image"])
+emoji_proposal_df.to_csv(
+    os.path.join(base_path, "emoji_proposal_table.csv"),
+    index=False,
+    encoding="utf-8",
+)
