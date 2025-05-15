@@ -13,15 +13,27 @@ with open(input_file, "r", encoding="utf-8") as f:
 table = soup.find("table")
 rows = table.find_all("tr")
 
-# Extract headers
-headers = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"])]
+# Define headers explicitly since the table has no <th> header row
+headers = ["Proposal Link", "Proposal Title", "Proposer(s)", "Count", "Emoji Image"]
 
 emoji_list = []
-for row in rows[1:]:
+for row in rows:
     cols = row.find_all(["td", "th"])
     if not cols or len(cols) != len(headers):
         continue
-    entry = {headers[i]: cols[i].get_text(strip=True) for i in range(len(headers))}
+    # Extract the proposal link and document number from the first column's <a>
+    proposal_link = cols[0].find("a")
+    link = proposal_link["href"] if proposal_link else ""
+    doc_number = proposal_link.get_text(strip=True) if proposal_link else ""
+    # Extract the rest as text, except the last column (image)
+    entry = {
+        "Document Number": doc_number,
+        headers[0]: link,
+        headers[1]: cols[1].get_text(strip=True),
+        headers[2]: cols[2].get_text(strip=True),
+        headers[3]: cols[3].get_text(strip=True),
+        headers[4]: str(cols[4]),  # Save the HTML for the image cell
+    }
     emoji_list.append(entry)
 
 # Write to JSON
