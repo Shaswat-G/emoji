@@ -23,21 +23,46 @@ class EmailExtractor:
 
     @staticmethod
     def sanitize_text(text):
-        """Clean text to avoid Unicode encoding issues"""
-        if not text or not isinstance(text, str):
+        """Clean text to avoid Unicode encoding issues and illegal Excel characters."""
+        if text is None or not isinstance(text, str):
             return text
-
         try:
             # Normalize Unicode (NFC form tends to work best)
             text = unicodedata.normalize("NFC", text)
+            # Remove illegal Unicode characters for Excel/openpyxl
+            # Remove control chars, surrogates, noncharacters
+            illegal_ranges = [
+                (0x00, 0x08),
+                (0x0B, 0x0C),
+                (0x0E, 0x1F),
+                (0x7F, 0x9F),
+                (0xD800, 0xDFFF),  # Surrogates
+                (0xFFFE, 0xFFFF),
+            ]
 
-            # Remove or replace problematic characters
-            # Replace surrogate pairs with replacement character
+            def is_illegal(char):
+                cp = ord(char)
+                for start, end in illegal_ranges:
+                    if start <= cp <= end:
+                        return True
+                return False
+
+            text = "".join(c for c in text if not is_illegal(c))
+            # Replace any remaining problematic bytes
             text = text.encode("utf-8", errors="replace").decode("utf-8")
             return text
         except Exception:
-            # If all else fails, return a safe string
             return "[Encoding Error]"
+
+    @staticmethod
+    def clean_dataframe_strings(df):
+        """Sanitize all string columns in the DataFrame to avoid Excel errors."""
+        for col in df.columns:
+            if df[col].dtype == object:
+                df[col] = df[col].apply(
+                    lambda x: EmailExtractor.sanitize_text(x) if pd.notna(x) else x
+                )
+        return df
 
     # --- Utility methods for parsing ---
     @staticmethod
@@ -56,7 +81,7 @@ class EmailExtractor:
     @staticmethod
     def parse_html_comments(html):
         """Return all HTML comments as a list of strings."""
-        return re.findall(r'<!--\s*([^>]+?)\s*-->', html)
+        return re.findall(r"<!--\s*([^>]+?)\s*-->", html)
 
     @staticmethod
     def parse_headers_from_comments(comments):
@@ -76,13 +101,15 @@ class EmailExtractor:
         for line in lines:
             stripped = line.lstrip()
             quote_level = 0
-            while quote_level < len(stripped) and stripped[quote_level] == '>':
+            while quote_level < len(stripped) and stripped[quote_level] == ">":
                 quote_level += 1
-            is_blank = (stripped == "")
+            is_blank = stripped == ""
             if quote_level > 0 or (is_blank and prev_quote_level > 0 and quote_buffer):
                 if quote_level > 0 or is_blank:
                     quote_buffer.append(line)
-                    prev_quote_level = quote_level if quote_level > 0 else prev_quote_level
+                    prev_quote_level = (
+                        quote_level if quote_level > 0 else prev_quote_level
+                    )
                     continue
             if prev_quote_level > 0 and quote_buffer:
                 reformatted_lines.append(f"[Quote level {prev_quote_level}]")
@@ -120,7 +147,11 @@ class EmailExtractor:
             p_blocks = soup.find_all("p")
             if p_blocks:
                 p_html = str(p_blocks[0])
-                from_match = re.search(r'<strong>From:</strong>\s*(.*?)\(<a href="mailto:([^"]+)"', p_html, re.DOTALL)
+                from_match = re.search(
+                    r'<strong>From:</strong>\s*(.*?)\(<a href="mailto:([^"]+)"',
+                    p_html,
+                    re.DOTALL,
+                )
                 if from_match:
                     from_name = from_match.group(1).strip()
                     from_addr = from_match.group(2).strip().split("?")[0]
@@ -128,7 +159,7 @@ class EmailExtractor:
                     email_match = re.search(r'<a href="mailto:([^"]+)"', p_html)
                     if email_match:
                         from_addr = email_match.group(1).strip().split("?")[0]
-                date_match = re.search(r'<strong>Date:</strong>\s*([^<]+)', p_html)
+                date_match = re.search(r"<strong>Date:</strong>\s*([^<]+)", p_html)
                 date = date_match.group(1).strip() if date_match else date_str
         else:
             # 2.2.0: extract from <address class="headers">
@@ -138,9 +169,13 @@ class EmailExtractor:
                 if from_span:
                     email_link = from_span.find("a")
                     if email_link:
-                        from_addr = self.extract_from_mailto(email_link.get("href", "")).replace("_at_", "@")
+                        from_addr = self.extract_from_mailto(
+                            email_link.get("href", "")
+                        ).replace("_at_", "@")
                     else:
-                        from_addr = from_span.get_text(" ", strip=True).replace("_at_", "@")
+                        from_addr = from_span.get_text(" ", strip=True).replace(
+                            "_at_", "@"
+                        )
                     from_text = from_span.get_text(" ", strip=True)
                     name_match = re.match(r"From\s*:\s*(.*?)\s*<", from_text)
                     if name_match:
@@ -164,23 +199,34 @@ class EmailExtractor:
                 # Date
                 date_span = mail_div.find("span", {"id": "date"})
                 date_value = (
-                    date_span.find(string=True, recursive=False).strip() if date_span else ""
+                    date_span.find(string=True, recursive=False).strip()
+                    if date_span
+                    else ""
                 )
                 date_value = date_value.lstrip(":").strip()
-                date = date_value or headers.get("sent", "") or headers.get("date", "") or ""
+                date = (
+                    date_value
+                    or headers.get("sent", "")
+                    or headers.get("date", "")
+                    or ""
+                )
 
         # --- Body extraction ---
         body = ""
         if is_hypermail_215:
-            body_match = re.search(r'<!-- body="start" -->(.*?)<!-- body="end" -->', html, re.DOTALL | re.IGNORECASE)
+            body_match = re.search(
+                r'<!-- body="start" -->(.*?)<!-- body="end" -->',
+                html,
+                re.DOTALL | re.IGNORECASE,
+            )
             if body_match:
                 body_html = body_match.group(1)
-                body_html = re.sub(r'<br\s*/?>', '\n', body_html)
-                body_html = re.sub(r'<[^>]+>', '', body_html)
-                body_html = re.sub(r'&nbsp;', ' ', body_html)
-                body_html = re.sub(r'&lt;', '<', body_html)
-                body_html = re.sub(r'&gt;', '>', body_html)
-                body_html = re.sub(r'&amp;', '&', body_html)
+                body_html = re.sub(r"<br\s*/?>", "\n", body_html)
+                body_html = re.sub(r"<[^>]+>", "", body_html)
+                body_html = re.sub(r"&nbsp;", " ", body_html)
+                body_html = re.sub(r"&lt;", "<", body_html)
+                body_html = re.sub(r"&gt;", ">", body_html)
+                body_html = re.sub(r"&amp;", "&", body_html)
                 body_lines = [line.strip() for line in body_html.strip().splitlines()]
                 body = self.group_quoted_blocks(body_lines)
         else:
@@ -240,13 +286,25 @@ class EmailExtractor:
 
         try:
             response = requests.get(email_url, timeout=30)
+            if (
+                response.status_code == 403
+                or b"You don't have permission to access this resource"
+                in response.content
+            ):
+                error_msg = (
+                    "Forbidden: You don't have permission to access this resource."
+                )
+                logging.error(f"Forbidden for URL: {email_url} | Reason: {error_msg}")
+                return {**row.to_dict(), **empty_fields, "error": error_msg}
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
             html = str(soup)
             is_2011 = int(row["year"]) == 2011
             meta_generator = soup.find("meta", {"name": "generator"})
             generator_content = meta_generator["content"] if meta_generator else ""
-            is_hypermail_215 = is_2011 and "hypermail 2.1.5" in generator_content.lower()
+            is_hypermail_215 = (
+                is_2011 and "hypermail 2.1.5" in generator_content.lower()
+            )
             try:
                 email_message = self.extract_email_fields(soup, html, is_hypermail_215)
                 if email_message:
@@ -290,17 +348,23 @@ def main():
     base_path = os.getcwd()
     email_archive_path = os.path.join(base_path, "mail_archive_old_format.xlsx")
 
-    email_archive = pd.read_excel(email_archive_path, sheet_name="mail_archive_old_format")
-    # year_mask = (email_archive["year"] >= 2001) & (email_archive["year"] <= 2013)
-    year_mask = (email_archive["year"] == 2011) & (email_archive["month"] == 6)
+    email_archive = pd.read_excel(
+        email_archive_path, sheet_name="mail_archive_old_format"
+    )
+    year_mask = (email_archive["year"] >= 2001) & (email_archive["year"] <= 2013)
+    # year_mask = (email_archive["year"] == 2011) & (email_archive["month"] == 1)
     masked_email_archive = email_archive[year_mask].reset_index(drop=True)
 
     base_url = "https://www.unicode.org/mail-arch/unicode-ml/"
     extractor = EmailExtractor(base_url)
     expanded_df = extractor.process_archive(masked_email_archive, max_workers=8)
 
-    output_path = os.path.join(base_path, "utc_email_old_archive_testing.xlsx")
+    # Clean illegal characters before saving to Excel
+    expanded_df = EmailExtractor.clean_dataframe_strings(expanded_df)
+
+    output_path = os.path.join(base_path, "utc_email_old_archive_parsed.xlsx")
     expanded_df.to_excel(output_path, index=False, engine="openpyxl")
+
 
 if __name__ == "__main__":
     main()
