@@ -206,5 +206,5 @@ email-archive/
 parsed_excels/
 archives/
 
-emoji_proposals.html
+*.html
 /proposal_reports
