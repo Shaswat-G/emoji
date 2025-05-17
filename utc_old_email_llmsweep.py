@@ -86,17 +86,17 @@ def remove_illegal_characters(text):
     return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]", "", text)
 
 
-def create_email_prompt(subject, body, prompt_template):
-    # Ensure subject and body are strings and not NaN
-    if not isinstance(subject, str) or pd.isna(subject):
-        subject = ""
+def create_email_prompt(body, thread_subject, prompt_template):
+    # Ensure thread_subject and body are strings and not NaN
+    if not isinstance(thread_subject, str) or pd.isna(thread_subject):
+        thread_subject = ""
     if not isinstance(body, str) or pd.isna(body):
         body = ""
     # Truncate body if needed
     max_chars = 8000
     if len(body) > max_chars:
         body = body[:max_chars] + "... [truncated]"
-    return prompt_template.format(subject=subject, body=body)
+    return prompt_template.format(body=body, thread_subject=thread_subject)
 
 
 def process_row(row_data, client, config, prompt_template):
@@ -115,11 +115,9 @@ def process_row(row_data, client, config, prompt_template):
     }
     try:
         # Use .get for pandas Series to avoid KeyError
-        subject = row.get("subject", "")
         body = row.get("body", "")
-        prompt = create_email_prompt(subject, body, prompt_template)
-        print(f"Processing row {idx} with prompt: {prompt}")
-        input("Press Enter to continue...")
+        thread_subject = row.get("subject", "")
+        prompt = create_email_prompt(body, thread_subject, prompt_template)
         content, tokens, cost, error = call_llm_api(client, config, prompt)
         if error:
             result["processing_error"] = f"API error: {error}"
@@ -177,23 +175,28 @@ if __name__ == "__main__":
     client = OpenAI(api_key=api_key)
     base_path = os.getcwd()
     input_file = os.path.join(base_path, "utc_email_old_archive_parsed.xlsx")
-    output_file = os.path.join(base_path, "utc_email_old_with_llm_extraction_testing.xlsx")
+    output_file = os.path.join(
+        base_path, "utc_email_old_with_llm_extraction_testing.xlsx"
+    )
     print(f"Processing {input_file} ...")
-    df = pd.read_excel(input_file).sample(5) # only for testing
+    df = pd.read_excel(input_file).sample(5)  # only for testing
     # Add/ensure LLM fields
     for col, default in [
         ("emoji_relevant", False),
-        ("people", None),
-        ("emoji_references", None),
-        ("entities", None),
-        ("summary", None),
-        ("description", None),
-        ("other_details", None),
+        ("people", []),
+        ("emoji_references", []),
+        ("entities", []),
+        ("summary", ""),
+        ("description", ""),
+        ("other_details", ""),
         ("processing_error", None),
         ("api_cost", 0.0),
     ]:
         if col not in df.columns:
-            df[col] = default
+            if isinstance(default, list):
+                df[col] = [list(default) for _ in range(len(df))]
+            else:
+                df[col] = [default] * len(df)
     batch_size = 10
     total_rows = len(df)
     total_cost = 0.0

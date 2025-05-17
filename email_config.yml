@@ -1,5 +1,5 @@
 # Paths
-prompt_path: "email_prompt.txt"
+prompt_path: "old_email_prompt.txt" # new email prompt was simply email_prompt.txt
 api_key_path: "api_key.txt"
 
 # API settings
