@@ -28,11 +28,7 @@ def extract_emojis(text):
         return {"emoji_chars": [], "unicode_points": [], "emoji_shortcodes": []}
 
     # Extract actual emoji characters
-    emoji_list = [
-        emoji_dict["emoji"]
-        for emoji_dict in emoji.emoji_list(text)
-        if isinstance(emoji_dict, dict) and "emoji" in emoji_dict
-    ]
+    emoji_list = [emoji_dict["emoji"] for emoji_dict in emoji.emoji_list(text) if isinstance(emoji_dict, dict) and "emoji" in emoji_dict]
 
     # Demojize to capture shortcodes
     demojized = emoji.demojize(text)
@@ -67,26 +63,27 @@ def extract_doc_refs(text):
 if __name__ == "__main__":
 
     BASE_DIR = os.getcwd()
-    file_name = "utc_email_with_llm_extraction.xlsx"
+    file_name = "utc_email_old_with_llm_extraction.xlsx"
     file_path = os.path.join(BASE_DIR, file_name)
 
     df = pd.read_excel(file_path)
-    df.drop(columns=["description"], inplace=True, errors="ignore")
+    columns_to_drop = ["to", "cc", "bcc", "in_reply_to", "references", "description", "received"]
+    df.drop(columns=columns_to_drop, inplace=True, errors="ignore")
     df.dropna(subset=["body"], inplace=True)
     df.reset_index(drop=True, inplace=True)
-    
+
     # Preprocess the email body text
     df["body"] = df["body"].apply(preprocess_text)
-    
+
     # Extract emojis and their shortcodes
     emoji_data = df["body"].apply(extract_emojis)
     df = pd.concat([df, emoji_data.apply(pd.Series)], axis=1)
-    
+
     # Extract document references
     df["doc_ref"] = df["body"].apply(extract_doc_refs)
-    
+
     # save the results to a new Excel file
-    output_file_name = "utc_email_with_llm_extraction_output.xlsx"
+    output_file_name = "utc_email_old_with_llm_extraction_doc_refs.xlsx"
     output_file_path = os.path.join(BASE_DIR, output_file_name)
     df.to_excel(output_file_path, index=False)
     print(f"Processed data saved to {output_file_path}")
