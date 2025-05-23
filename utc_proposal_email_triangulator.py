@@ -51,10 +51,10 @@ except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
 proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
-# email_df = pd.read_excel(utc_email_path)
 
-print(proposal_df.sample(3))
-print(email_df.sample(3))
+# email_df = pd.read_excel(utc_email_path)
+# print(proposal_df.sample(3))
+# print(email_df.sample(3))
 
 
 """
@@ -86,10 +86,8 @@ The field should be the corresponding subject/body/summary/emoji_shortcodes.
 
 3) Create a simple confidence score based on the number of matches found. For example, if there are 2 matches found in the subject and 1 match found in the body, we can say that the confidence score is 3. If there are no matches found, we can say that the confidence score is 0. We can add a column "confidence_score" to the final dataframe.
 
-
-
-Feedback:
-1) Finding a simple string match without suffixed and prefixed spaces will lead to sub-word matching. For example If we are searching for "HARP" is should not match with "Sharp".
+4) Finding a simple string match without suffixed and prefixed spaces will lead to sub-word matching. For example If we are searching for "HARP" is should not match with "Sharp".
+5) Retain all the columns from the email_df in the final dataframe. This will help 
 """
 
 
@@ -263,6 +261,24 @@ def match_proposal_to_email_detailed(proposal_row, email_row):
 
 # Main matching logic with year filtering and detailed match info
 matches = []
+email_context_cols = [
+    "year",
+    "month",
+    "date",
+    "from_email",
+    "from_name",
+    "subject",
+    "emoji_relevant",
+    "people",
+    "emoji_references",
+    "entities",
+    "summary",
+    "other_details",
+    "emoji_chars",
+    "unicode_points",
+    "emoji_shortcodes",
+    "extracted_doc_refs",
+]
 for _, proposal_row in proposal_df.iterrows():
     doc_num = proposal_row.get("doc_num", "")
     proposal_year = extract_year_from_docnum(doc_num)
@@ -281,18 +297,17 @@ for _, proposal_row in proposal_df.iterrows():
             proposal_row, email_row
         )
         if confidence_score > 0:
-            matches.append(
-                {
-                    "proposal_doc_num": proposal_row.get("doc_num"),
-                    "proposal_for_1": proposal_row.get("proposal_for_1"),
-                    "proposal_for_2": proposal_row.get("proposal_for_2"),
-                    "email_subject": email_row.get("subject"),
-                    "email_doc_ref": email_row.get("doc_ref"),
-                    "email_year": email_row.get("year"),
-                    "match_type": "; ".join(match_types),
-                    "confidence_score": confidence_score,
-                }
-            )
+            match_entry = {
+                "proposal_doc_num": proposal_row.get("doc_num"),
+                "proposal_for_1": proposal_row.get("proposal_for_1"),
+                "proposal_for_2": proposal_row.get("proposal_for_2"),
+                "match_type": "; ".join(match_types),
+                "confidence_score": confidence_score,
+            }
+            # Add requested email context columns
+            for col in email_context_cols:
+                match_entry[col] = email_row.get(col)
+            matches.append(match_entry)
 
 print(f"Found {len(matches)} matches.")
 for match in matches[:5]:
