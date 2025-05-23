@@ -15,6 +15,7 @@ emoji_proposal_path = os.path.join(base_path, "emoji_proposal_table.csv")
 
 emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
 utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_extraction.xlsx")
+utc_email_path = os.path.join(base_path, "utc_email_combined_with_llm_extraction_doc_ref.xlsx")
 
 
 def safe_literal_eval(val):
@@ -38,7 +39,6 @@ columns_to_eval = [
     "people",
     "emoji_references",
     "entities",
-    "token_usage",
 ]
 
 try:
@@ -51,6 +51,16 @@ try:
 except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
+
+# try:
+#     utc_email_df = pd.read_excel(utc_email_path)
+
+#     # Then apply converters manually to specific columns after loading
+#     for col in columns_to_eval:
+#         if col in utc_email_df.columns:
+#             utc_email_df[col] = utc_email_df[col].apply(safe_literal_eval)
+# except Exception as e:
+#     print(f"Error loading or processing the Excel file: {e}")
 
 def normalize_doc_num(doc_num):
     """

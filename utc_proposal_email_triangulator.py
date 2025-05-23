@@ -12,9 +12,7 @@ from collections import defaultdict
 base_path = os.getcwd()
 
 emoji_proposal_path = os.path.join(base_path, "emoji_proposal_table.csv")
-utc_email_path = os.path.join(
-    base_path, "utc_email_combined_with_llm_extraction_doc_ref.xlsx"
-)
+utc_email_path = os.path.join(base_path, "utc_email_combined_with_llm_extraction_doc_ref.xlsx")
 
 
 def safe_literal_eval(val):
