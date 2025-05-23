@@ -30,7 +30,7 @@ if __name__ == "__main__":
         "emoji_chars",
         "unicode_points",
         "emoji_shortcodes",
-        "doc_ref",
+        "extracted_doc_refs",
     ]
 
     # Read
@@ -54,13 +54,13 @@ if __name__ == "__main__":
         "relevance",
         "error",
     ]
-    
+
     rename_columns = {
         "author": "from_name",
         "message_id": "thread_id",
         "from": "from_email",
     }
-    
+
     df_old = df_old.drop(columns=columns_to_drop_new, errors="ignore")
     df_old = df_old.rename(columns=rename_columns)
     df_old = df_old[COLUMNS]
