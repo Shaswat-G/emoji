@@ -15,7 +15,39 @@ emoji_proposal_path = os.path.join(base_path, "emoji_proposal_table.csv")
 
 emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
 utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_extraction.xlsx")
-utc_email_path = os.path.join(base_path, "utc_email_combined_with_llm_extraction_doc_ref.xlsx")
+utc_email_path = os.path.join(base_path, "emoji_proposal_email_matches.csv")
+
+
+"""
+I am adding another paradigm to our analysis.
+
+We are reading a new dataframe called email_match_df which contains all email matches to proposals with context and metadata.
+Your job is to include an additonal section for each of the proposal reports that contains an overview of the email matches to that proposal.
+This would be similar to what you have already done for the UTC document registry.
+
+The email_match_df contains the following columns:
+proposal_doc_num - comes from the emoji_proposal_df - this is the document number.
+proposal_for_1 - comes from the emoji_proposal_df - this is the primary keyword used for matching.
+proposal_for_2 - comes from the emoji_proposal_df - this is the secondary keyword used for matching.
+match_type - describes how the email matches the proposal - which fields triggered the match.
+confidence_score - a score indicating the strength of the match - basically the number of fields that matched.
+year - the year the email was sent.
+month - the month the email was sent.
+date - the date the email was sent.
+from_email - the email address of the sender.
+from_name - the name of the sender.
+subject - the subject line of the email.
+people - Pythonic list of people in that email
+emoji_references - Pythonic list of emoji references in that email
+entities - Pythonic list of entities in that email
+summary - the summary of the email
+emoji_chars - Pythonic list of emoji characters in that email
+unicode_points - Pythonic list of unicode points in that email
+emoji_shortcodes - Pythonic list of emoji shortcodes in that email
+extracted_doc_refs - Pythonic list of document references extracted from the email
+
+
+"""
 
 
 def safe_literal_eval(val):
@@ -52,15 +84,16 @@ except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
 
-# try:
-#     utc_email_df = pd.read_excel(utc_email_path)
+try:
+    email_match_df = pd.read_csv(utc_email_path)
 
-#     # Then apply converters manually to specific columns after loading
-#     for col in columns_to_eval:
-#         if col in utc_email_df.columns:
-#             utc_email_df[col] = utc_email_df[col].apply(safe_literal_eval)
-# except Exception as e:
-#     print(f"Error loading or processing the Excel file: {e}")
+    # Then apply converters manually to specific columns after loading
+    for col in columns_to_eval:
+        if col in email_match_df.columns:
+            email_match_df[col] = email_match_df[col].apply(safe_literal_eval)
+except Exception as e:
+    print(f"Error loading or processing the CSV file: {e}")
+
 
 def normalize_doc_num(doc_num):
     """
@@ -98,7 +131,9 @@ def track_proposal_through_time(proposal_id, utc_df):
     utc_df_copy["normalized_doc_num"] = utc_df_copy["doc_num"].apply(normalize_doc_num)
 
     # 1. Find the original proposal document (direct match on doc_num)
-    direct_matches = utc_df_copy[utc_df_copy["normalized_doc_num"] == normalized_proposal_id].copy()
+    direct_matches = utc_df_copy[
+        utc_df_copy["normalized_doc_num"] == normalized_proposal_id
+    ].copy()
 
     # 2. Find all documents that reference this proposal
     def references_proposal(refs_list):
@@ -111,13 +146,19 @@ def track_proposal_through_time(proposal_id, utc_df):
                 return True
         return False
 
-    reference_matches = utc_df_copy[utc_df_copy["extracted_doc_refs"].apply(references_proposal)].copy()
+    reference_matches = utc_df_copy[
+        utc_df_copy["extracted_doc_refs"].apply(references_proposal)
+    ].copy()
 
     # 3. Combine direct and reference matches
-    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(subset=["doc_num"])
+    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(
+        subset=["doc_num"]
+    )
 
     # 4. Mark each document as either the original proposal or a reference
-    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference")
+    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(
+        lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference"
+    )
 
     # 5. Sort by date to create a chronological timeline
     if not all_matches.empty and "date" in all_matches.columns:
@@ -127,7 +168,9 @@ def track_proposal_through_time(proposal_id, utc_df):
             print(f"Error sorting dates for {proposal_id}: {e}")
             # Fallback: try to convert dates if needed
             if "date" in all_matches.columns:
-                all_matches["date"] = pd.to_datetime(all_matches["date"], errors="coerce")
+                all_matches["date"] = pd.to_datetime(
+                    all_matches["date"], errors="coerce"
+                )
                 all_matches = all_matches.sort_values("date")
 
     return all_matches.drop(columns=["normalized_doc_num"])
@@ -145,7 +188,11 @@ def analyze_proposal_context(timeline_df):
     """
     context = {
         "doc_count": len(timeline_df),
-        "date_range": ((timeline_df["date"].min(), timeline_df["date"].max()) if not timeline_df.empty else ("Unknown", "Unknown")),
+        "date_range": (
+            (timeline_df["date"].min(), timeline_df["date"].max())
+            if not timeline_df.empty
+            else ("Unknown", "Unknown")
+        ),
         "people_involved": set(),
         "entities_involved": set(),
         "emoji_mentioned": set(),
@@ -269,6 +316,94 @@ def analyze_all_emoji_proposals():
     return all_timelines
 
 
+def generate_proposal_email_match_section(proposal_id, email_match_df):
+    """
+    Generate a Markdown section summarizing email matches for a given proposal.
+    """
+    # Filter email matches for this proposal
+    matches = email_match_df[
+        email_match_df["proposal_doc_num"].apply(
+            lambda x: (
+                normalize_doc_num(x) == proposal_id if isinstance(x, str) else False
+            )
+        )
+    ]
+    if matches.empty:
+        return "\n## Email Matches\n\nNo email matches found for this proposal.\n"
+
+    # Sort by confidence_score and date (descending)
+    matches = matches.sort_values(
+        by=["confidence_score", "date"], ascending=[False, True]
+    )
+
+    section = [
+        "\n## Email Matches",
+        f"\nFound {len(matches)} email(s) matching this proposal.",
+        "\n| Date | From | Subject | Confidence | Match Type |",
+        "|------|------|---------|------------|------------|",
+    ]
+    for _, row in matches.iterrows():
+        date_str = str(row["date"]) if pd.notnull(row["date"]) else ""
+        from_str = (
+            f"{row['from_name']} <{row['from_email']}>"
+            if pd.notnull(row.get("from_name")) and pd.notnull(row.get("from_email"))
+            else (row.get("from_name") or row.get("from_email") or "")
+        )
+        subject = row.get("subject", "")
+        if not isinstance(subject, str):
+            subject = "" if pd.isna(subject) else str(subject)
+        conf = row.get("confidence_score", "")
+        match_type = row.get("match_type", "")
+        if not isinstance(match_type, str):
+            match_type = "" if pd.isna(match_type) else str(match_type)
+        section.append(
+            f"| {date_str} | {from_str} | {subject[:40].replace('|',' ')}{'...' if len(subject)>40 else ''} | {conf} | {match_type[:40].replace('|',' ')}{'...' if len(match_type)>40 else ''} |"
+        )
+
+    # Add a details section for the top 3 matches, including summary, people, and entities
+    section.append("\n### Top Email Match Details")
+    for _, row in matches.head(3).iterrows():
+        date_str = str(row["date"]) if pd.notnull(row["date"]) else ""
+        from_str = (
+            f"{row['from_name']} <{row['from_email']}>"
+            if pd.notnull(row.get("from_name")) and pd.notnull(row.get("from_email"))
+            else (row.get("from_name") or row.get("from_email") or "")
+        )
+        subject = str(row.get("subject", ""))
+        summary = str(row.get("summary", ""))
+        match_type = str(row.get("match_type", ""))
+        conf = str(row.get("confidence_score", ""))
+        # People and entities
+        people = row.get("people", [])
+        if isinstance(people, str):
+            try:
+                people = ast.literal_eval(people)
+            except Exception:
+                people = [people]
+        if not isinstance(people, list):
+            people = [people] if people else []
+        entities = row.get("entities", [])
+        if isinstance(entities, str):
+            try:
+                entities = ast.literal_eval(entities)
+            except Exception:
+                entities = [entities]
+        if not isinstance(entities, list):
+            entities = [entities] if entities else []
+        section.append(
+            f"\n**Date:** {date_str}\n"
+            f"\n**From:** {from_str}\n"
+            f"\n**Subject:** {subject}\n"
+            f"\n**Confidence Score:** {conf}\n"
+            f"\n**Match Type:** {match_type}\n"
+            f"\n**People:** {', '.join([str(p) for p in people]) if people else 'None'}"
+            f"\n**Entities:** {', '.join([str(e) for e in entities]) if entities else 'None'}"
+            f"\n**Summary:** {summary[:500]}{'...' if isinstance(summary, str) and len(summary)>500 else ''}\n"
+        )
+
+    return "\n".join(section)
+
+
 def generate_proposal_timeline_report(
     proposal_id, timeline_df=None, proposal_title="Unknown", proposer="Unknown"
 ):
@@ -292,12 +427,13 @@ def generate_proposal_timeline_report(
 
     context = analyze_proposal_context(timeline_df)
 
-    # Format the report with more details
     report = [f"# Timeline Report for Proposal {proposal_id}"]
     report.append(f"\n## {proposal_title}")
     report.append(f"\n**Proposer(s):** {proposer}")
 
-    report.append(f"\nFound in **{context['doc_count']} documents** from {context['date_range'][0]} to {context['date_range'][1]}")
+    report.append(
+        f"\nFound in **{context['doc_count']} documents** from {context['date_range'][0]} to {context['date_range'][1]}"
+    )
 
     report.append("\n## Key Contributors")
     contributors = sorted(list(context["people_involved"]))
@@ -317,15 +453,15 @@ def generate_proposal_timeline_report(
 
     report.append("\n## Document Timeline")
     for idx, row in timeline_df.iterrows():
-        date_str = (row["date"].strftime("%Y-%m-%d") if pd.notnull(row["date"]) else "Unknown date")
+        date_str = (
+            row["date"].strftime("%Y-%m-%d")
+            if pd.notnull(row["date"])
+            else "Unknown date"
+        )
         report.append(f"\n### {date_str} | {row['doc_num']} | {row['reference_type']}")
         report.append(f"**Subject:** {row['subject']}")
-
-        # Add source/author if available
         if "source" in row and pd.notnull(row["source"]):
             report.append(f"**Source:** {row['source']}")
-
-        # Add document type if available
         if "doc_type" in row and pd.notnull(row["doc_type"]):
             doc_type = row["doc_type"]
             if isinstance(doc_type, dict):
@@ -335,15 +471,28 @@ def generate_proposal_timeline_report(
                 report.append(f"**Document Type:** {doc_type_str}")
             else:
                 report.append(f"**Document Type:** {doc_type}")
-
-        # Add summary if available
-        if ("summary" in row and isinstance(row["summary"], str) and len(row["summary"]) > 0):
-            summary = (row["summary"][:500] + "..." if len(row["summary"]) > 500 else row["summary"])
+        if (
+            "summary" in row
+            and isinstance(row["summary"], str)
+            and len(row["summary"]) > 0
+        ):
+            summary = (
+                row["summary"][:500] + "..."
+                if len(row["summary"]) > 500
+                else row["summary"]
+            )
             report.append(f"\n**Summary:** {summary}")
+        if (
+            "emoji_references" in row
+            and isinstance(row["emoji_references"], list)
+            and row["emoji_references"]
+        ):
+            report.append(
+                f"\n**Emoji References:** {', '.join(row['emoji_references'])}"
+            )
 
-        # Add emoji references if available
-        if ("emoji_references" in row and isinstance(row["emoji_references"], list) and row["emoji_references"]):
-            report.append(f"\n**Emoji References:** {', '.join(row['emoji_references'])}")
+    # --- Add Email Matches Section ---
+    report.append(generate_proposal_email_match_section(proposal_id, email_match_df))
 
     return "\n".join(report)
 
@@ -551,9 +700,13 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
 
         for p_id in top_proposals:
             if p_id in timeline_paths and timeline_paths[p_id]:
-                rel_path = os.path.relpath(timeline_paths[p_id], os.path.join(base_path, "proposal_reports"))
+                rel_path = os.path.relpath(
+                    timeline_paths[p_id], os.path.join(base_path, "proposal_reports")
+                )
                 safe_filename = re.sub(r'[\\/*?:"<>|]', "_", p_id)
-                example_timelines.append(f"\n### {p_id} Timeline\n\n[![{p_id} Timeline]({rel_path})]({safe_filename}_report.md)")
+                example_timelines.append(
+                    f"\n### {p_id} Timeline\n\n[![{p_id} Timeline]({rel_path})]({safe_filename}_report.md)"
+                )
 
         if example_timelines:
             md_content.append("\n## Example Proposal Timelines")
@@ -561,14 +714,22 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
 
     # Add most referenced proposals section
     md_content.append("\n## Most Referenced Proposals")
-    md_content.append("\nThe following proposals have been referenced most frequently in UTC documents:")
-    md_content.append("\n| Proposal ID | Title | Proposer | References | Contributors | Emojis |")
-    md_content.append("| ----------- | ----- | -------- | ---------- | ------------ | ------ |")
+    md_content.append(
+        "\nThe following proposals have been referenced most frequently in UTC documents:"
+    )
+    md_content.append(
+        "\n| Proposal ID | Title | Proposer | References | Contributors | Emojis |"
+    )
+    md_content.append(
+        "| ----------- | ----- | -------- | ---------- | ------------ | ------ |"
+    )
 
     for _, row in stats_df.head(10).iterrows():
         proposal_id = row["proposal_id"]
         safe_filename = re.sub(r'[\\/*?:"<>|]', "_", proposal_id)
-        md_content.append(f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['contributor_count']} | {row['emoji_count']} |")
+        md_content.append(
+            f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['contributor_count']} | {row['emoji_count']} |"
+        )
 
     # Add complete list of all proposals
     md_content.append("\n## All Analyzed Proposals")
@@ -578,9 +739,13 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
     for _, row in stats_df.iterrows():
         proposal_id = row["proposal_id"]
         safe_filename = re.sub(r'[\\/*?:"<>|]', "_", proposal_id)
-        md_content.append(f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['date_range']} |")  # Add information about the analysis methodology
+        md_content.append(
+            f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['date_range']} |"
+        )  # Add information about the analysis methodology
     md_content.append("\n## Analysis Methodology")
-    md_content.append("\nThis analysis was performed using the UTC Proposal Triangulator, which:")
+    md_content.append(
+        "\nThis analysis was performed using the UTC Proposal Triangulator, which:"
+    )
     md_content.append("\n1. Identifies emoji proposals in the UTC document registry")
     md_content.append("2. Tracks references to these proposals in other UTC documents")
     md_content.append("3. Analyzes the context in which proposals are discussed")
