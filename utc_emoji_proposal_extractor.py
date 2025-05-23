@@ -22,6 +22,37 @@ def extract_doc_refs(text):
     return list(sorted(set(standardized_matches)))
 
 
+# Improved patterns for extracting the main proposal subject from proposal_title
+PROPOSAL_FOR_PATTERNS = [
+    # “Proposal for Emoji: X” or “Proposal for Emoji – X”
+    re.compile(
+        r"(?i)^proposal for emoji[:\s-]\s*(?P<e>.+?)(?:\s+(?:unicode\s+)?emoji)?$",
+        re.IGNORECASE,
+    ),
+    # “X [emoji proposal]”
+    re.compile(r"(?i)^(.+?)\s*\[emoji proposal\]$", re.IGNORECASE),
+    # “Proposal for X Emoji”
+    re.compile(r"(?i)^proposal for\s*(?P<e>.+?)\s+emoji$", re.IGNORECASE),
+    # “X Unicode Emoji Proposal”
+    re.compile(r"(?i)^(.+?)\s+unicode emoji proposal$", re.IGNORECASE),
+    # “X Emoji Proposal”
+    re.compile(r"(?i)^(.+?)\s+emoji proposal$", re.IGNORECASE),
+    # plain “X Emoji”
+    re.compile(r"(?i)^(.+?)\s+emoji$", re.IGNORECASE),
+]
+
+
+def extract_proposal_for(title):
+    """Extract the main proposal subject from proposal_title using improved patterns."""
+    for pat in PROPOSAL_FOR_PATTERNS:
+        m = pat.match(title)
+        if m:
+            # if we named the group “e”, use it; else use group(1)
+            return (m.groupdict().get("e") or m.group(1)).strip()
+    # no “emoji” keyword → keep full title
+    return title.strip()
+
+
 def extract_table_from_html(html_file):
     """Extract emoji proposals from a given HTML file."""
     with open(html_file, "r", encoding="utf-8") as f:
@@ -48,6 +79,8 @@ def extract_table_from_html(html_file):
             "count": cols[3].get_text(strip=True),
             "emoji_image": str(cols[4]),
         }
+        # Add proposal_for field
+        entry["proposal_for"] = extract_proposal_for(entry["proposal_title"])
         emoji_list.append(entry)
     return emoji_list
 
@@ -80,4 +113,7 @@ emoji_proposal_df = pd.DataFrame(emoji_list)
 if "emoji_image" in emoji_proposal_df.columns:
     emoji_proposal_df = emoji_proposal_df.drop(columns=["emoji_image"])
 
-emoji_proposal_df.to_csv(os.path.join(base_path, "emoji_proposal_table.csv"), index=False, encoding="utf-8")
+
+emoji_proposal_df.to_csv(
+    os.path.join(base_path, "emoji_proposal_table.csv"), index=False, encoding="utf-8"
+)
