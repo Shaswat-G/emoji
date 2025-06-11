@@ -9,7 +9,7 @@ import pandas as pd
 # 1. emoji_code, (it is also a link, we do not care about the link, we do not need it),
 # 2. emoji_image, (we do not need this, can be dropped)
 # 3. emoji_name,
-# 4. proposal_doc_num t(this should extracted in the form of a pythonic list -> comma separate list.)
+# 4. proposal_doc_num (this should be extracted in the form of a pythonic list -> comma-separated list.)
 # The issue is, sometimes, some rows just have a single heading like "2023 — Smileys & Emotion", "2023 — People & Body".
 # We can extract it into a separate column as all the rows following such a row belong to this category - should be called emoji_category
 # Hence your output should be 1 csv file with 4 columns : emoji_code, emoji_name, proposal_doc_num, emoji_category.
