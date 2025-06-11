@@ -88,24 +88,26 @@ def extract_table_from_html(html_file):
 # Read both HTML files
 base_path = os.getcwd()
 input_file_v16 = os.path.join(base_path, "emoji_proposals_v16.html")
-input_file_v13 = os.path.join(base_path, "emoji_proposals_v13.html")
+# input_file_v13 = os.path.join(base_path, "emoji_proposals_v13.html")
 
 emoji_list_v16 = extract_table_from_html(input_file_v16)
-emoji_list_v13 = extract_table_from_html(input_file_v13)
+# emoji_list_v13 = extract_table_from_html(input_file_v13)
 
 # Combine and deduplicate by doc_num (keep first occurrence)
 combined = {}
-for entry in emoji_list_v16 + emoji_list_v13:
+# for entry in emoji_list_v16 + emoji_list_v13:
+for entry in emoji_list_v16:
+    
     doc_num = entry["doc_num"]
     if doc_num not in combined:
         combined[doc_num] = entry
 emoji_list = list(combined.values())
 
-# Write to JSON
-file_name = "emoji_proposal_table.json"
-output_path = os.path.join(base_path, file_name)
-with open(output_path, "w", encoding="utf-8") as f:
-    json.dump(emoji_list, f, ensure_ascii=False, indent=2)
+# # Write to JSON
+# file_name = "emoji_proposal_table.json"
+# output_path = os.path.join(base_path, file_name)
+# with open(output_path, "w", encoding="utf-8") as f:
+#     json.dump(emoji_list, f, ensure_ascii=False, indent=2)
 
 # Write to CSV
 emoji_proposal_df = pd.DataFrame(emoji_list)
@@ -114,6 +116,4 @@ if "emoji_image" in emoji_proposal_df.columns:
     emoji_proposal_df = emoji_proposal_df.drop(columns=["emoji_image"])
 
 
-emoji_proposal_df.to_csv(
-    os.path.join(base_path, "emoji_proposal_table.csv"), index=False, encoding="utf-8"
-)
+emoji_proposal_df.to_csv(os.path.join(base_path, "emoji_proposal_table_verify.csv"), index=False, encoding="utf-8")
