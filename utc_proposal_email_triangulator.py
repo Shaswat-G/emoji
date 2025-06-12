@@ -7,6 +7,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import networkx as nx
 from collections import defaultdict
+from tqdm import tqdm
 
 
 base_path = os.getcwd()
@@ -277,7 +278,7 @@ email_context_cols = [
     "emoji_shortcodes",
     "extracted_doc_refs",
 ]
-for _, proposal_row in proposal_df.iterrows():
+for _, proposal_row in tqdm(proposal_df.iterrows(), total=proposal_df.shape[0], desc="Matching proposals to emails"):
     doc_num = proposal_row.get("doc_num", "")
     proposal_year = extract_year_from_docnum(doc_num)
     if proposal_year is None:
@@ -285,15 +286,9 @@ for _, proposal_row in proposal_df.iterrows():
     min_year = proposal_year - year_neighborhood
     max_year = proposal_year + year_neighborhood
     # Filter emails by year column
-    filtered_emails = email_df[
-        email_df["year"].apply(
-            lambda y: min_year <= int(y) <= max_year if pd.notna(y) else False
-        )
-    ]
+    filtered_emails = email_df[email_df["year"].apply(lambda y: min_year <= int(y) <= max_year if pd.notna(y) else False)]
     for _, email_row in filtered_emails.iterrows():
-        confidence_score, match_types = match_proposal_to_email_detailed(
-            proposal_row, email_row
-        )
+        confidence_score, match_types = match_proposal_to_email_detailed(proposal_row, email_row)
         if confidence_score > 0:
             match_entry = {
                 "proposal_doc_num": proposal_row.get("doc_num"),
