@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_email_new_old_concatenator.py
+# Summary: Harmonizes and concatenates new- and old-format UTC email datasets
+#          with LLM and document reference fields into a single master Excel
+#          file for unified downstream analysis.
+# Inputs:  utc_email_new_with_llm_extraction_doc_refs.xlsx,
+#          utc_email_old_with_llm_extraction_doc_refs.xlsx
+# Outputs: utc_email_combined_with_llm_extraction_doc_ref.xlsx (combined master)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import pandas as pd
 import os
 import re

@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_email_triangulator.py
+# Summary: Matches emoji proposals to UTC emails using document references and
+#          semantic n-gram keyword matching, outputting results with confidence
+#          scores and full email context for analysis of the Unicode emoji
+#          proposal process.
+# Inputs:  emoji_proposal_table.csv, utc_email_combined_with_llm_extraction_doc_ref.xlsx
+# Outputs: emoji_proposal_email_matches.csv (CSV with match details and context)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import pandas as pd
 import json

@@ -1,3 +1,17 @@
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_summarizer.py
+# Summary: Tracks and summarizes the flow, references, and attention dynamics
+#          of emoji proposals through the UTC document registry and related
+#          communications, enabling quantitative analysis of proposal velocity,
+#          attention, and stakeholder engagement.
+# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
+#          emoji_proposal_email_matches.csv
+# Outputs: DataFrames and functions for proposal-centric analysis
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
+
 import os
 import pandas as pd
 import json

@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_extractor.py
+# Summary: Downloads, extracts, and analyzes text from UTC register documents,
+#          saving results and metadata for downstream analysis of emoji
+#          relevance, references, and document citations.
+# Inputs:  utc_register_all_classified.xlsx (document register with URLs)
+# Outputs: utc_register_with_text.xlsx (enriched metadata), extracted_texts/
+#          (directory of document text files)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import pandas as pd
 import numpy as np
 import os

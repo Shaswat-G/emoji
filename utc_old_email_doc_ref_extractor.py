@@ -1,3 +1,14 @@
+# -----------------------------------------------------------------------------
+# Script: utc_old_email_doc_ref_extractor.py
+# Summary: Extracts emoji characters, Unicode points, emoji shortcodes, and
+#          document references from old-format UTC email bodies, outputting an
+#          enriched Excel file for downstream analysis.
+# Inputs:  utc_email_old_with_llm_extraction.xlsx (parsed and LLM-annotated emails)
+# Outputs: utc_email_old_with_llm_extraction_doc_refs.xlsx (enriched with extractions)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import pandas as pd
 import re

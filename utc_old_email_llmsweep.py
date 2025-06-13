@@ -1,3 +1,16 @@
+# -----------------------------------------------------------------------------
+# Script: utc_old_email_llmsweep.py
+# Summary: Sweeps parsed old-format Unicode emails with an LLM to extract
+#          structured metadata and summaries, saving results to a new Excel
+#          file for downstream analysis of UTC communications.
+# Inputs:  utc_email_old_archive_parsed.xlsx (parsed old-format emails),
+#          email_config.yml, old_email_prompt.txt (or email_prompt.txt),
+#          OpenAI API key
+# Outputs: utc_email_old_with_llm_extraction_testing.xlsx (LLM-extracted fields)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import yaml
 import json

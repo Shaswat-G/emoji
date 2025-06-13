@@ -1,3 +1,13 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_reg_process_classify.py
+# Summary: Classifies UTC document register entries by type and emoji relevance
+#          using subject line keyword matching, outputting an enriched Excel file.
+# Inputs:  utc_register_all.xlsx (UTC document register)
+# Outputs: utc_register_all_classified.xlsx (classified/enriched register)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import pandas as pd
 import numpy as np
 import os

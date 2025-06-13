@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_summarizer.py
+# Summary: Extracts keywords and summaries from UTC document texts using RAKE,
+#          YAKE, and LSA, saving results to an enriched Excel file for
+#          downstream analysis.
+# Inputs:  utc_register_with_text.xlsx (document metadata and text),
+#          extracted_texts/ (directory of document text files)
+# Outputs: utc_register_with_text_and_summary.xlsx (enriched with keywords/summaries)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import yake
 import pandas as pd

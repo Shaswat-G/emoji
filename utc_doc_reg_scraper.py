@@ -1,3 +1,13 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_reg_scraper.py
+# Summary: Scrapes and consolidates UTC document register metadata from
+#          Unicode.org for multiple years into structured CSV and Excel files.
+# Inputs:  None (fetches HTML from Unicode.org for 2011–2021)
+# Outputs: utc_register_{year}.csv (per year), utc_register_all.xlsx (combined)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import requests
 from bs4 import BeautifulSoup
 import csv
@@ -70,7 +80,7 @@ def scrape_utc_register(year, save_to_csv=True):
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data: {e}")
         return []
-    
+
 def main():
     years = range(2011, 2022)
     

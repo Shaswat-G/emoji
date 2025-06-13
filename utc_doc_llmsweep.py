@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_llmsweep.py
+# Summary: Sweeps UTC document texts with an LLM to extract structured semantic
+#          metadata and summaries, saving results for downstream analysis of
+#          Unicode decision-making and emoji proposal processes.
+# Inputs:  Document texts (from Excel, text files, etc.), config.yml,
+#          prompt.txt, OpenAI API key
+# Outputs: Excel or CSV file with LLM-extracted fields per document
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import yaml
 import json
