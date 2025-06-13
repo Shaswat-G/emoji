@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_new_email_parser.py
+# Summary: Crawls, downloads, parses, and structures Unicode mailing list
+#          emails into clean Excel files, extracting metadata, threading, and
+#          content for downstream analysis of UTC communications.
+# Inputs:  Unicode mailing list archives (.txt) from https://corp.unicode.org/pipermail/unicode/
+# Outputs: Excel files per archive in parsed_excels/ with structured email data
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
+
 import os
 import requests
 from bs4 import BeautifulSoup
