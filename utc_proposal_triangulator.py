@@ -7,6 +7,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import networkx as nx
 from collections import defaultdict
+from tqdm import tqdm
 
 
 base_path = os.getcwd()
@@ -252,7 +253,11 @@ def analyze_all_emoji_proposals():
 
     # Directly iterate over emoji proposal dataframe rows
     # Assuming all required columns exist: doc_num, proposal_title, proposer, proposal_link
-    for _, row in emoji_proposal_df.iterrows():
+    for _, row in tqdm(
+        emoji_proposal_df.iterrows(),
+        total=emoji_proposal_df.shape[0],
+        desc="Analyzing proposals",
+    ):
         proposal_id = normalize_doc_num(row["doc_num"])
         proposal_title = row["proposal_title"]
         proposer = row["proposer"]
@@ -784,7 +789,9 @@ def generate_all_reports():
     timeline_paths = {}
 
     # Process each proposal
-    for proposal_id, timeline in all_timelines.items():
+    for proposal_id, timeline in tqdm(
+        all_timelines.items(), desc="Generating visualizations and reports"
+    ):
         print(f"Generating report for proposal: {proposal_id}")
 
         # Find the proposal title using correct column names
