@@ -1,3 +1,16 @@
+# -----------------------------------------------------------------------------
+# Script: utc_emoji_proposal_extractor.py
+# Summary: Extracts, cleans, and consolidates emoji proposal data from UTC HTML
+#          tables (v13 and v16) into deduplicated JSON and CSV files for
+#          downstream analysis of the Unicode emoji proposal process.
+# Inputs:  emoji_proposals_v13.html, emoji_proposals_v16.html (HTML tables)
+# Outputs: emoji_proposal_table.json (all fields), emoji_proposal_table.csv
+#          (excludes emoji image HTML)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
+
 import json
 from bs4 import BeautifulSoup
 import os
@@ -25,10 +38,7 @@ def extract_doc_refs(text):
 # Improved patterns for extracting the main proposal subject from proposal_title
 PROPOSAL_FOR_PATTERNS = [
     # “Proposal for Emoji: X” or “Proposal for Emoji – X”
-    re.compile(
-        r"(?i)^proposal for emoji[:\s-]\s*(?P<e>.+?)(?:\s+(?:unicode\s+)?emoji)?$",
-        re.IGNORECASE,
-    ),
+    re.compile(r"(?i)^proposal for emoji[:\s-]\s*(?P<e>.+?)(?:\s+(?:unicode\s+)?emoji)?$", re.IGNORECASE),
     # “X [emoji proposal]”
     re.compile(r"(?i)^(.+?)\s*\[emoji proposal\]$", re.IGNORECASE),
     # “Proposal for X Emoji”
@@ -114,6 +124,4 @@ if "emoji_image" in emoji_proposal_df.columns:
     emoji_proposal_df = emoji_proposal_df.drop(columns=["emoji_image"])
 
 
-emoji_proposal_df.to_csv(
-    os.path.join(base_path, "emoji_proposal_table.csv"), index=False, encoding="utf-8"
-)
+emoji_proposal_df.to_csv(os.path.join(base_path, "emoji_proposal_table.csv"), index=False, encoding="utf-8")
