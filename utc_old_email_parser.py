@@ -1,8 +1,19 @@
+# -----------------------------------------------------------------------------
+# Script: utc_old_email_parser.py
+# Summary: Fetches, parses, and structures old-format Unicode mailing list
+#          emails into a clean Excel file for downstream analysis.
+# Inputs:  mail_archive_old_format.xlsx (email index), Unicode mailing list
+#          archive (HTML)
+# Outputs: utc_email_old_archive_parsed.xlsx (parsed and cleaned emails)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import re
+import re   
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import unicodedata
