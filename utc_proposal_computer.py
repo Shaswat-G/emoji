@@ -1,3 +1,16 @@
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_computer.py
+# Summary: Loads and cross-references emoji proposal and UTC document datasets,
+#          parsing and flagging proposal documents for quantitative analysis of
+#          the Unicode emoji proposal process.
+# Inputs:  emoji_to_proposal_map.csv, emoji_proposal_table.csv,
+#          utc_register_all_classified.xlsx
+# Outputs: Prints count of proposal documents to console
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
+
 import pandas as pd
 import os
 import ast
