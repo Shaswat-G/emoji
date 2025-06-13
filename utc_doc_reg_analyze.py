@@ -1,3 +1,13 @@
+# -----------------------------------------------------------------------------
+# Script: utc_doc_reg_analyze.py
+# Summary: Analyzes, visualizes, and summarizes UTC document register data by
+#          type, source, and emoji relevance, producing plots and statistics for research.
+# Inputs:  utc_register_all_classified.xlsx (classified UTC document register)
+# Outputs: Plots, summary statistics, and expanded DataFrames in output directories
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import pandas as pd
 import numpy as np
 import os
@@ -882,7 +892,7 @@ emoji_quarterly_file = os.path.join(emoji_trends_dir, 'emoji_percentage_by_quart
 plt.savefig(emoji_quarterly_file, dpi=300, bbox_inches='tight')
 plt.close()
 
-################################################################################ 
+################################################################################
 # 8. NEW: Additional Emoji Analysis - Subcategory Analysis
 ################################################################################
 
