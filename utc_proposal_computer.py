@@ -20,7 +20,9 @@ utc_doc_path = os.path.join(base_path, utc_doc_name)
 utc_docs = pd.read_excel(utc_doc_path)
 
 # Convert the 'doc_type' column from string representation of dict to actual Python dict
-utc_docs["doc_type"] = utc_docs["doc_type"].apply(lambda x: dict(ast.literal_eval(x)) if pd.notnull(x) else {})
+utc_docs["doc_type"] = utc_docs["doc_type"].apply(
+    lambda x: dict(ast.literal_eval(x)) if pd.notnull(x) else {} if pd.notnull(x) else {}
+)
 
 def is_proposal(doc_type):
     return 1 if "Proposals" in doc_type else 0
