@@ -1,10 +1,23 @@
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_emoji_mapper.py
+# Summary: Extracts emoji-to-proposal mappings and category information from an
+#          HTML table, outputting a structured CSV for downstream analysis of
+#          Unicode emoji proposal processes.
+# Inputs:  emoji_to_proposal_map.html (HTML table)
+# Outputs: emoji_to_proposal_map.csv (CSV with emoji_code, emoji_name,
+#          proposal_doc_num, emoji_category)
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
+
 from bs4 import BeautifulSoup
 import os
 import re
 import pandas as pd
 
 
-# For GitHub CoPilot:
+# For future readers:
 # The table contains 3 columns:
 # 1. emoji_code, (it is also a link, we do not care about the link, we do not need it),
 # 2. emoji_image, (we do not need this, can be dropped)
