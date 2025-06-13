@@ -1,3 +1,15 @@
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_triangulator.py
+# Summary: Generates detailed, proposal-centric reports triangulating UTC
+#          document flow and matched email communications, with contextual and
+#          statistical analysis for each emoji proposal.
+# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
+#          emoji_proposal_email_matches.csv
+# Outputs: Markdown reports per proposal (proposal_reports/), summary CSV
+# Context: Part of a research pipeline analyzing UTC's emoji proposal and
+#          decision-making processes using public data.
+# -----------------------------------------------------------------------------
+
 import os
 import pandas as pd
 import json
@@ -46,8 +58,6 @@ emoji_chars - Pythonic list of emoji characters in that email
 unicode_points - Pythonic list of unicode points in that email
 emoji_shortcodes - Pythonic list of emoji shortcodes in that email
 extracted_doc_refs - Pythonic list of document references extracted from the email
-
-
 """
 
 
