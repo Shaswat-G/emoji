@@ -97,4 +97,41 @@ This document defines all metrics used to analyze the flow, attention, and dynam
 
 ---
 
-_All metrics are computed per proposal unless otherwise specified. These metrics enable a multi-dimensional analysis of proposal flow, attention, and engagement in the UTC process._
+## 8. Throughput & Process Efficiency Analysis (Pre vs Post-2017)
+
+- **Era Classification**: Classify proposals by submission date relative to UTC's 2017 process changes.  
+  _Formula_: `'pre_2017' if first_date < 2017-01-01 else 'post_2017'`
+- **Processing Efficiency**: Average processing time, reference count, and velocity by era.  
+  _Formula_: `mean(processing_days by era)`, `mean(reference_count by era)`, `mean(velocity by era)`
+- **Statistical Significance**: Mann-Whitney U test comparing metrics between eras.  
+  _Formula_: `mannwhitneyu(pre_2017_values, post_2017_values)`
+- **Process Standardization**: Reduction in processing variation (standard deviation).  
+  _Formula_: `std(processing_days_post) / std(processing_days_pre)`
+- **Throughput Volume**: Number of proposals submitted per year by era.  
+  _Formula_: `count(proposals per year by era)`
+- **People/Body Diversity Impact**: Specific analysis for proposals related to people and body representation.  
+  _Formula_: `filter(proposals where title/keywords match people_body_keywords)`
+- **Improvement Metrics**: Percentage change in key metrics between eras.  
+  _Formula_: `(post_2017_mean - pre_2017_mean) / pre_2017_mean * 100`
+
+### Key Hypotheses to Test
+
+1. **H1**: Post-2017 proposals have shorter processing times
+2. **H2**: Post-2017 proposals require fewer intermediate references
+3. **H3**: Post-2017 proposals have higher processing velocity
+4. **H4**: People/body diversity proposals benefited more from process improvements
+
+---
+
+## 9. Advanced Comparative Metrics
+
+- **Era Transition Analysis**: Proposals that span both eras (submitted pre-2017, referenced post-2017).  
+  _Formula_: `proposals where first_date < 2017-01-01 AND last_date >= 2017-01-01`
+- **Process Consistency**: Coefficient of variation in processing metrics by era.  
+  _Formula_: `std(metric) / mean(metric)` for each era
+- **Quality Indicators**: Email engagement and confidence scores by era.  
+  _Formula_: `mean(email_count by era)`, `mean(confidence_score by era)`
+
+---
+
+_All metrics are computed per proposal unless otherwise specified. These metrics enable a multi-dimensional analysis of proposal flow, attention, and engagement in the UTC process, with special focus on evaluating the impact of 2017 process standardization changes._
