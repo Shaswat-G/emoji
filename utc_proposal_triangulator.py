@@ -142,9 +142,7 @@ def track_proposal_through_time(proposal_id, utc_df):
     utc_df_copy["normalized_doc_num"] = utc_df_copy["doc_num"].apply(normalize_doc_num)
 
     # 1. Find the original proposal document (direct match on doc_num)
-    direct_matches = utc_df_copy[
-        utc_df_copy["normalized_doc_num"] == normalized_proposal_id
-    ].copy()
+    direct_matches = utc_df_copy[utc_df_copy["normalized_doc_num"] == normalized_proposal_id].copy()
 
     # 2. Find all documents that reference this proposal
     def references_proposal(refs_list):
@@ -157,19 +155,13 @@ def track_proposal_through_time(proposal_id, utc_df):
                 return True
         return False
 
-    reference_matches = utc_df_copy[
-        utc_df_copy["extracted_doc_refs"].apply(references_proposal)
-    ].copy()
+    reference_matches = utc_df_copy[utc_df_copy["extracted_doc_refs"].apply(references_proposal)].copy()
 
     # 3. Combine direct and reference matches
-    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(
-        subset=["doc_num"]
-    )
+    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(subset=["doc_num"])
 
     # 4. Mark each document as either the original proposal or a reference
-    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(
-        lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference"
-    )
+    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference")
 
     # 5. Sort by date to create a chronological timeline
     if not all_matches.empty and "date" in all_matches.columns:
@@ -179,9 +171,7 @@ def track_proposal_through_time(proposal_id, utc_df):
             print(f"Error sorting dates for {proposal_id}: {e}")
             # Fallback: try to convert dates if needed
             if "date" in all_matches.columns:
-                all_matches["date"] = pd.to_datetime(
-                    all_matches["date"], errors="coerce"
-                )
+                all_matches["date"] = pd.to_datetime(all_matches["date"], errors="coerce")
                 all_matches = all_matches.sort_values("date")
 
     return all_matches.drop(columns=["normalized_doc_num"])
@@ -242,11 +232,7 @@ def analyze_proposal_context(timeline_df):
                     context["key_topics"][word] += 1
 
     # Sort key topics by frequency
-    context["key_topics"] = dict(
-        sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[
-            :30
-        ]
-    )  # Keep top 30 topics
+    context["key_topics"] = dict(sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[:30])  # Keep top 30 topics
 
     return context
 
