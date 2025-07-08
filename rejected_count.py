@@ -160,18 +160,69 @@ while i < len(rows):
 # Add 'ID' to headers for the last column
 headers.append("ID")
 
+
+# 1. Standardize column names to lower case with underscores, and rename 'Name (Meaning)' to 'name'
+def pep8_col(col):
+    col = col.strip().lower().replace(" ", "_").replace("(", "").replace(")", "")
+    if col == "name_meaning":
+        return "name"
+    return col
+
+
+headers = [pep8_col(h) for h in headers]
+
+import re
+
+DOC_REF_PATTERN = re.compile(r"(L2/\d{2}[-‐–—−]\d{3})")
+
+
+def extract_doc_refs(text):
+    """Extract document references from the text."""
+    if not text or not isinstance(text, str):
+        return []
+    matches = DOC_REF_PATTERN.findall(text)
+    standardized_matches = [re.sub(r"[‐–—−]", "-", match) for match in matches]
+    return list(sorted(set(standardized_matches)))
+
+
+# 2. Build DataFrame with new headers
+
 df = pd.DataFrame(data, columns=headers)
 
 
-# Clean all cells in the DataFrame by replacing Unicode hyphens and common mis-encodings with ASCII hyphen
+# 3. Clean all cells in the DataFrame by replacing Unicode hyphens and common mis-encodings with ASCII hyphen
 def normalize_hyphens(text):
     if not isinstance(text, str):
         return text
-    # Replace common mis-encoded hyphens (e.g., 'â€“', 'â€”') and Unicode hyphens/dashes
     text = re.sub(r"(â€“|â€”|â€|‐|–|—|−|‑)", "-", text)
     return text
 
 
 df = df.map(normalize_hyphens)
+
+# 4. For document and decision columns, extract only the document number (not the link)
+doc_cols = [c for c in df.columns if c in ["document", "decision"]]
+for col in doc_cols:
+    df[col] = df[col].apply(
+        lambda x: extract_doc_refs(x)[0] if extract_doc_refs(x) else ""
+    )
+
+
+# 5. Standardize and clean document references in all text columns
+def clean_text(text):
+    if not isinstance(text, str):
+        return text
+    # Normalize hyphens
+    text = normalize_hyphens(text)
+    # Remove extra whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+df = df.map(clean_text)
+
+# Remove 'sample' column if it exists
+df = df.drop(columns=[col for col in df.columns if col == "sample"], errors="ignore")
+
 df.to_csv("rejected_proposals.csv", index=False)
 print("Data exported to rejected_proposals.csv")
