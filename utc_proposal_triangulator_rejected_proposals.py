@@ -23,42 +23,12 @@ from tqdm import tqdm
 
 
 base_path = os.getcwd()
-emoji_proposal_path = os.path.join(base_path, "emoji_proposal_table.csv")
+emoji_proposal_path = os.path.join(base_path, "rejected_proposals.csv")
 
 
 emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
 utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_extraction.xlsx")
-utc_email_path = os.path.join(base_path, "emoji_proposal_email_matches.csv")
-
-
-"""
-I am adding another paradigm to our analysis.
-
-We are reading a new dataframe called email_match_df which contains all email matches to proposals with context and metadata.
-Your job is to include an additonal section for each of the proposal reports that contains an overview of the email matches to that proposal.
-This would be similar to what you have already done for the UTC document registry.
-
-The email_match_df contains the following columns:
-proposal_doc_num - comes from the emoji_proposal_df - this is the document number.
-proposal_for_1 - comes from the emoji_proposal_df - this is the primary keyword used for matching.
-proposal_for_2 - comes from the emoji_proposal_df - this is the secondary keyword used for matching.
-match_type - describes how the email matches the proposal - which fields triggered the match.
-confidence_score - a score indicating the strength of the match - basically the number of fields that matched.
-year - the year the email was sent.
-month - the month the email was sent.
-date - the date the email was sent.
-from_email - the email address of the sender.
-from_name - the name of the sender.
-subject - the subject line of the email.
-people - Pythonic list of people in that email
-emoji_references - Pythonic list of emoji references in that email
-entities - Pythonic list of entities in that email
-summary - the summary of the email
-emoji_chars - Pythonic list of emoji characters in that email
-unicode_points - Pythonic list of unicode points in that email
-emoji_shortcodes - Pythonic list of emoji shortcodes in that email
-extracted_doc_refs - Pythonic list of document references extracted from the email
-"""
+# utc_email_path = os.path.join(base_path, "emoji_proposal_email_matches.csv") ---- we do not have email matches for rejected proposals yet.
 
 
 def safe_literal_eval(val):
@@ -93,17 +63,6 @@ try:
             utc_doc_reg_df[col] = utc_doc_reg_df[col].apply(safe_literal_eval)
 except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
-
-
-try:
-    email_match_df = pd.read_csv(utc_email_path)
-
-    # Then apply converters manually to specific columns after loading
-    for col in columns_to_eval:
-        if col in email_match_df.columns:
-            email_match_df[col] = email_match_df[col].apply(safe_literal_eval)
-except Exception as e:
-    print(f"Error loading or processing the CSV file: {e}")
 
 
 def normalize_doc_num(doc_num):
@@ -317,94 +276,6 @@ def analyze_all_emoji_proposals():
     return all_timelines
 
 
-def generate_proposal_email_match_section(proposal_id, email_match_df):
-    """
-    Generate a Markdown section summarizing email matches for a given proposal.
-    """
-    # Filter email matches for this proposal
-    matches = email_match_df[
-        email_match_df["proposal_doc_num"].apply(
-            lambda x: (
-                normalize_doc_num(x) == proposal_id if isinstance(x, str) else False
-            )
-        )
-    ]
-    if matches.empty:
-        return "\n## Email Matches\n\nNo email matches found for this proposal.\n"
-
-    # Sort by confidence_score and date (descending)
-    matches = matches.sort_values(
-        by=["confidence_score", "date"], ascending=[False, True]
-    )
-
-    section = [
-        "\n## Email Matches",
-        f"\nFound {len(matches)} email(s) matching this proposal.",
-        "\n| Date | From | Subject | Confidence | Match Type |",
-        "|------|------|---------|------------|------------|",
-    ]
-    for _, row in matches.iterrows():
-        date_str = str(row["date"]) if pd.notnull(row["date"]) else ""
-        from_str = (
-            f"{row['from_name']} <{row['from_email']}>"
-            if pd.notnull(row.get("from_name")) and pd.notnull(row.get("from_email"))
-            else (row.get("from_name") or row.get("from_email") or "")
-        )
-        subject = row.get("subject", "")
-        if not isinstance(subject, str):
-            subject = "" if pd.isna(subject) else str(subject)
-        conf = row.get("confidence_score", "")
-        match_type = row.get("match_type", "")
-        if not isinstance(match_type, str):
-            match_type = "" if pd.isna(match_type) else str(match_type)
-        section.append(
-            f"| {date_str} | {from_str} | {subject[:40].replace('|',' ')}{'...' if len(subject)>40 else ''} | {conf} | {match_type[:40].replace('|',' ')}{'...' if len(match_type)>40 else ''} |"
-        )
-
-    # Add a details section for the top 3 matches, including summary, people, and entities
-    section.append("\n### Top Email Match Details")
-    for _, row in matches.head(3).iterrows():
-        date_str = str(row["date"]) if pd.notnull(row["date"]) else ""
-        from_str = (
-            f"{row['from_name']} <{row['from_email']}>"
-            if pd.notnull(row.get("from_name")) and pd.notnull(row.get("from_email"))
-            else (row.get("from_name") or row.get("from_email") or "")
-        )
-        subject = str(row.get("subject", ""))
-        summary = str(row.get("summary", ""))
-        match_type = str(row.get("match_type", ""))
-        conf = str(row.get("confidence_score", ""))
-        # People and entities
-        people = row.get("people", [])
-        if isinstance(people, str):
-            try:
-                people = ast.literal_eval(people)
-            except Exception:
-                people = [people]
-        if not isinstance(people, list):
-            people = [people] if people else []
-        entities = row.get("entities", [])
-        if isinstance(entities, str):
-            try:
-                entities = ast.literal_eval(entities)
-            except Exception:
-                entities = [entities]
-        if not isinstance(entities, list):
-            entities = [entities] if entities else []
-        section.append(
-            f"\n**Date:** {date_str}\n"
-            f"\n**From:** {from_str}\n"
-            f"\n**Subject:** {subject}\n"
-            f"\n**Confidence Score:** {conf}\n"
-            f"\n**Match Type:** {match_type}\n"
-            f"\n**People:** {', '.join([str(p) for p in people]) if people else 'None'}"
-            f"\n**Entities:** {', '.join([str(e) for e in entities]) if entities else 'None'}"
-            f"\n**Summary:** {summary[:500]}{'...' if isinstance(summary, str) and len(summary)>500 else ''}\n"
-        )
-
-    return "\n".join(section)
-
-
 def generate_proposal_timeline_report(
     proposal_id, timeline_df=None, proposal_title="Unknown", proposer="Unknown"
 ):
@@ -491,9 +362,6 @@ def generate_proposal_timeline_report(
             report.append(
                 f"\n**Emoji References:** {', '.join(row['emoji_references'])}"
             )
-
-    # --- Add Email Matches Section ---
-    report.append(generate_proposal_email_match_section(proposal_id, email_match_df))
 
     return "\n".join(report)
 
