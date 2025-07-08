@@ -65,6 +65,39 @@ except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
 
+rejected_proposals = list(set(emoji_proposal_df["document"]))
+authors = {}
+
+for proposal in rejected_proposals:
+    # Get all author strings for this proposal
+    author_strs = (
+        emoji_proposal_df[emoji_proposal_df["document"] == proposal]["author"]
+        .dropna()
+        .tolist()
+    )
+    # Split each string by comma, strip whitespace, flatten, and deduplicate
+    author_list = []
+    for s in author_strs:
+        author_list.extend([a.strip() for a in s.split(",") if a.strip()])
+    authors[proposal] = list(set(author_list))
+
+relevant_columns = ["doc_num", "subject"]
+new_proposal_df = utc_doc_reg_df[utc_doc_reg_df["doc_num"].isin(rejected_proposals)][
+    relevant_columns
+].reset_index(drop=True)
+renamed_columns = ["doc_num", "proposal_title"]
+new_proposal_df.columns = renamed_columns
+
+# Add proposer column using the authors map
+new_proposal_df["proposer"] = new_proposal_df["doc_num"].map(
+    lambda doc: ", ".join(authors.get(doc, []))
+)
+
+del emoji_proposal_df
+emoji_proposal_df = new_proposal_df.copy()
+del new_proposal_df
+
+
 def normalize_doc_num(doc_num):
     """
     Normalize document numbers to handle encoding issues and format variations.
@@ -101,7 +134,9 @@ def track_proposal_through_time(proposal_id, utc_df):
     utc_df_copy["normalized_doc_num"] = utc_df_copy["doc_num"].apply(normalize_doc_num)
 
     # 1. Find the original proposal document (direct match on doc_num)
-    direct_matches = utc_df_copy[utc_df_copy["normalized_doc_num"] == normalized_proposal_id].copy()
+    direct_matches = utc_df_copy[
+        utc_df_copy["normalized_doc_num"] == normalized_proposal_id
+    ].copy()
 
     # 2. Find all documents that reference this proposal
     def references_proposal(refs_list):
@@ -114,13 +149,19 @@ def track_proposal_through_time(proposal_id, utc_df):
                 return True
         return False
 
-    reference_matches = utc_df_copy[utc_df_copy["extracted_doc_refs"].apply(references_proposal)].copy()
+    reference_matches = utc_df_copy[
+        utc_df_copy["extracted_doc_refs"].apply(references_proposal)
+    ].copy()
 
     # 3. Combine direct and reference matches
-    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(subset=["doc_num"])
+    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(
+        subset=["doc_num"]
+    )
 
     # 4. Mark each document as either the original proposal or a reference
-    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference")
+    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(
+        lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference"
+    )
 
     # 5. Sort by date to create a chronological timeline
     if not all_matches.empty and "date" in all_matches.columns:
@@ -130,7 +171,9 @@ def track_proposal_through_time(proposal_id, utc_df):
             print(f"Error sorting dates for {proposal_id}: {e}")
             # Fallback: try to convert dates if needed
             if "date" in all_matches.columns:
-                all_matches["date"] = pd.to_datetime(all_matches["date"], errors="coerce")
+                all_matches["date"] = pd.to_datetime(
+                    all_matches["date"], errors="coerce"
+                )
                 all_matches = all_matches.sort_values("date")
 
     return all_matches.drop(columns=["normalized_doc_num"])
@@ -191,7 +234,11 @@ def analyze_proposal_context(timeline_df):
                     context["key_topics"][word] += 1
 
     # Sort key topics by frequency
-    context["key_topics"] = dict(sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[:30])  # Keep top 30 topics
+    context["key_topics"] = dict(
+        sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[
+            :30
+        ]
+    )  # Keep top 30 topics
 
     return context
 
@@ -298,6 +345,15 @@ def generate_proposal_timeline_report(
         return f"# No mentions found for proposal {proposal_id}"
 
     context = analyze_proposal_context(timeline_df)
+
+    # Sanitize proposal_title and proposer to remove newlines
+    def sanitize_markdown_cell(val):
+        if not isinstance(val, str):
+            return val
+        return val.replace("\n", " ").replace("\r", " ").strip()
+
+    proposal_title = sanitize_markdown_cell(proposal_title)
+    proposer = sanitize_markdown_cell(proposer)
 
     report = [f"# Timeline Report for Proposal {proposal_id}"]
     report.append(f"\n## {proposal_title}")
@@ -594,10 +650,12 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
     )
 
     for _, row in stats_df.head(10).iterrows():
-        proposal_id = row["proposal_id"]
+        proposal_id = sanitize_markdown_cell(row["proposal_id"])
+        proposal_title = sanitize_markdown_cell(row["proposal_title"])
+        proposer = sanitize_markdown_cell(row["proposer"])
         safe_filename = re.sub(r'[\\/*?:"<>|]', "_", proposal_id)
         md_content.append(
-            f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['contributor_count']} | {row['emoji_count']} |"
+            f"| [{proposal_id}]({safe_filename}_report.md) | {proposal_title} | {proposer} | {row['reference_count']} | {row['contributor_count']} | {row['emoji_count']} |"
         )
 
     # Add complete list of all proposals
@@ -606,21 +664,14 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
     md_content.append("| ----------- | ----- | -------- | ---------- | ---------- |")
 
     for _, row in stats_df.iterrows():
-        proposal_id = row["proposal_id"]
+        proposal_id = sanitize_markdown_cell(row["proposal_id"])
+        proposal_title = sanitize_markdown_cell(row["proposal_title"])
+        proposer = sanitize_markdown_cell(row["proposer"])
         safe_filename = re.sub(r'[\\/*?:"<>|]', "_", proposal_id)
         md_content.append(
-            f"| [{proposal_id}]({safe_filename}_report.md) | {row['proposal_title']} | {row['proposer']} | {row['reference_count']} | {row['date_range']} |"
-        )  # Add information about the analysis methodology
-    md_content.append("\n## Analysis Methodology")
-    md_content.append(
-        "\nThis analysis was performed using the UTC Proposal Triangulator, which:"
-    )
-    md_content.append("\n1. Identifies emoji proposals in the UTC document registry")
-    md_content.append("2. Tracks references to these proposals in other UTC documents")
-    md_content.append("3. Analyzes the context in which proposals are discussed")
-    md_content.append("4. Creates timeline visualizations for each proposal")
-    md_content.append("5. Generates detailed timeline reports for each proposal")
-
+            f"| [{proposal_id}]({safe_filename}_report.md) | {proposal_title} | {proposer} | {row['reference_count']} | {row['date_range']} |"
+        )
+    # ...existing code...
     return "\n".join(md_content)
 
 
@@ -758,6 +809,12 @@ def main():
         print("❌ Analysis failed. Check the error messages above.")
 
     return index_path
+
+
+def sanitize_markdown_cell(val):
+    if not isinstance(val, str):
+        return val
+    return val.replace("\n", " ").replace("\r", " ").strip()
 
 
 if __name__ == "__main__":
