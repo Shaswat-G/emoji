@@ -2,7 +2,7 @@
 # It handles rowspan attributes, extracts relevant information, and normalizes hyphens in the text
 # for consistency. The final output is saved as a CSV file named "rejected_proposals.csv".
 # Note: There are some rows in Charlotte's page that reference emojis which were accepted in a different form at a later time.
-# This script cannot handle those cases and they were include manually.
+# This script cannot handle those cases and they were included manually.
 
 import os
 import pandas as pd
