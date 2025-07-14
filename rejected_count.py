@@ -1,7 +1,7 @@
 ### This script scrapes a webpage containing rejected emoji proposals, processes the data, and exports it to a CSV file.
 # It handles rowspan attributes, extracts relevant information, and normalizes hyphens in the text
 # for consistency. The final output is saved as a CSV file named "rejected_proposals.csv".
-# Note: There are some rows in Charlotte's page that have reference to Note which are emojis that were aaccepted in a different from in the future.
+# Note: There are some rows in Charlotte's page that reference emojis which were accepted in a different form at a later time.
 # This script cannot handle those cases and they were include manually.
 
 import os
