@@ -196,7 +196,7 @@ def normalize_hyphens(text):
     return text
 
 
-df = df.map(normalize_hyphens)
+df = df.applymap(normalize_hyphens)
 
 # 4. For document and decision columns, extract only the document number (not the link)
 doc_cols = [c for c in df.columns if c in ["document", "decision"]]
