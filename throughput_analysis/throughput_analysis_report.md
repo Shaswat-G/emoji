@@ -1,6 +1,6 @@
 # UTC Emoji Proposal Throughput Analysis
 
-*Generated on: 2025-06-30 06:26:37*
+*Generated on: 2025-07-01 14:43:20*
 
 ## Executive Summary
 
@@ -8,43 +8,44 @@ This analysis evaluates whether UTC's process standardization changes in 2017 im
 
 ## Overview Statistics
 
-- **Total Proposals Analyzed**: 290
-- **Pre-2017 Proposals**: 68
-- **Post-2017 Proposals**: 222
+- **Total Proposals Analyzed**: 260
+- **Pre-2017 Proposals**: 49
+- **Post-2017 Proposals**: 211
 
 ## Key Findings
 
 ### Statistically Significant Changes:
+- **Processing Days**: worsened significantly (p < 0.05)
 - **Reference Count**: worsened significantly (p < 0.05)
 - **Velocity Per Year**: worsened significantly (p < 0.05)
+- **Max Dormancy Days**: worsened significantly (p < 0.05)
 - **Unique People**: worsened significantly (p < 0.05)
 - **Unique Entities**: worsened significantly (p < 0.05)
 - **Email Count**: worsened significantly (p < 0.05)
-- **Avg Email Confidence**: worsened significantly (p < 0.05)
 
 ## Detailed Metrics Comparison
 
 | Metric | Pre-2017 Mean | Post-2017 Mean | Change | P-Value | Significant |
 |--------|---------------|----------------|---------|---------|-------------|
-| Processing Days | 396.21 | 229.46 | -42.1% | 0.747 | No |
-| Reference Count | 6.16 | 3.02 | -51.0% | 0.000 | Yes |
-| Velocity Per Year | 12.53 | 8.13 | -35.1% | 0.001 | Yes |
-| Max Dormancy Days | 224.63 | 172.69 | -23.1% | 0.269 | No |
-| Unique People | 73.44 | 51.91 | -29.3% | 0.000 | Yes |
-| Unique Entities | 19.87 | 10.87 | -45.3% | 0.000 | Yes |
-| Email Count | 40.19 | 7.03 | -82.5% | 0.000 | Yes |
-| Avg Email Confidence | 1.44 | 1.38 | -4.1% | 0.005 | Yes |
+| Processing Days | 181.59 | 210.44 | +15.9% | 0.049 | Yes |
+| Reference Count | 5.49 | 2.84 | -48.2% | 0.000 | Yes |
+| Velocity Per Year | 15.43 | 8.32 | -46.1% | 0.000 | Yes |
+| Max Dormancy Days | 127.71 | 163.44 | +28.0% | 0.002 | Yes |
+| Unique People | 74.53 | 50.62 | -32.1% | 0.000 | Yes |
+| Unique Entities | 19.43 | 10.51 | -45.9% | 0.000 | Yes |
+| Email Count | 26.78 | 7.32 | -72.7% | 0.004 | Yes |
+| Avg Email Confidence | 1.41 | 1.39 | -2.0% | 0.072 | No |
 
 ## People & Body Diversity Proposals
 
-- **Total People/Body Proposals**: 69
-- **Percentage of All Proposals**: 23.8%
-- **Pre-2017**: 30
-- **Post-2017**: 39
+- **Total People/Body Proposals**: 49
+- **Percentage of All Proposals**: 18.8%
+- **Pre-2017**: 15
+- **Post-2017**: 34
 
-- **Processing Days**: improved from 546.67 to 264.08
-- **Reference Count**: worsened from 6.97 to 4.44
-- **Velocity Per Year**: worsened from 11.51 to 9.73
+- **Processing Days**: worsened from 158.93 to 222.29
+- **Reference Count**: worsened from 5.53 to 4.00
+- **Velocity Per Year**: worsened from 17.36 to 10.26
 
 ## Methodology
 

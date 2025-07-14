@@ -25,6 +25,31 @@ warnings.filterwarnings("ignore")
 
 CUT_OFF_DATE = datetime(2017, 1, 1)  # Date to classify proposals before/after
 
+# Proposals to exclude from analysis (highly cited, clouding results)
+EXCLUDED_PROPOSALS = {
+    # Normalize all variants
+    "L2/07-257",
+    "L2/09-026",
+    "L2/14-173",
+    "L2/16-160",
+    "L2/16-181",
+    "L2/16-182",
+    "L2/09-379",
+    "L2/09-114",
+    "L2/11-052",
+    "L2/14-174",
+    "L2/15-054",
+    "L2/19-189",
+    "L2/13-207",
+    "L2/15-029",
+    "L2/23-030",
+    "L2/14-093",
+    "L2/16-304",
+    "L2/17-082",
+    "L2/17-011",
+    "L2/16-147",
+}
+
 # Import functions from the triangulator
 from utc_proposal_triangulator import (
     normalize_doc_num,
@@ -52,13 +77,19 @@ class UTCThroughputAnalyzer:
         self.emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
 
         # Load people and body diversity proposals
-        people_body_path = os.path.join(self.base_path, "people_and_body_proposals.xlsx")
+        people_body_path = os.path.join(
+            self.base_path, "people_and_body_proposals.xlsx"
+        )
         people_body_df = pd.read_excel(people_body_path)
         self.people_body_proposals = set(people_body_df["proposals"].astype(str))
-        print(f"Loaded {len(self.people_body_proposals)} people/body diversity proposals")
+        print(
+            f"Loaded {len(self.people_body_proposals)} people/body diversity proposals"
+        )
 
         # Load UTC document registry
-        utc_doc_reg_path = os.path.join(self.base_path, "utc_register_with_llm_extraction.xlsx")
+        utc_doc_reg_path = os.path.join(
+            self.base_path, "utc_register_with_llm_extraction.xlsx"
+        )
         self.utc_doc_reg_df = pd.read_excel(utc_doc_reg_path)
 
         # Parse Python objects in specified columns
@@ -76,15 +107,21 @@ class UTCThroughputAnalyzer:
 
         for col in columns_to_eval:
             if col in self.utc_doc_reg_df.columns:
-                self.utc_doc_reg_df[col] = self.utc_doc_reg_df[col].apply(safe_literal_eval)
+                self.utc_doc_reg_df[col] = self.utc_doc_reg_df[col].apply(
+                    safe_literal_eval
+                )
 
         # Load email matches
-        utc_email_path = os.path.join(self.base_path, "emoji_proposal_email_matches.csv")
+        utc_email_path = os.path.join(
+            self.base_path, "emoji_proposal_email_matches.csv"
+        )
         self.email_match_df = pd.read_csv(utc_email_path)
 
         for col in columns_to_eval:
             if col in self.email_match_df.columns:
-                self.email_match_df[col] = self.email_match_df[col].apply(safe_literal_eval)
+                self.email_match_df[col] = self.email_match_df[col].apply(
+                    safe_literal_eval
+                )
 
         # Convert date columns
         self._convert_dates()
@@ -97,11 +134,15 @@ class UTCThroughputAnalyzer:
         """Convert date columns to datetime objects"""
         # Convert UTC document dates
         if "date" in self.utc_doc_reg_df.columns:
-            self.utc_doc_reg_df["date"] = pd.to_datetime(self.utc_doc_reg_df["date"], errors="coerce")
+            self.utc_doc_reg_df["date"] = pd.to_datetime(
+                self.utc_doc_reg_df["date"], errors="coerce"
+            )
 
         # Convert email dates
         if "date" in self.email_match_df.columns:
-            self.email_match_df["date"] = pd.to_datetime(self.email_match_df["date"], errors="coerce")
+            self.email_match_df["date"] = pd.to_datetime(
+                self.email_match_df["date"], errors="coerce"
+            )
 
     def analyze_proposal_processing(self, proposal_id):
         """
@@ -117,7 +158,15 @@ class UTCThroughputAnalyzer:
             return None
 
         # Get email matches for this proposal
-        email_matches = self.email_match_df[self.email_match_df["proposal_doc_num"].apply(lambda x: (normalize_doc_num(x) == normalize_doc_num(proposal_id) if isinstance(x, str) else False))]
+        email_matches = self.email_match_df[
+            self.email_match_df["proposal_doc_num"].apply(
+                lambda x: (
+                    normalize_doc_num(x) == normalize_doc_num(proposal_id)
+                    if isinstance(x, str)
+                    else False
+                )
+            )
+        ]
 
         # Calculate metrics
         metrics = {
@@ -132,13 +181,19 @@ class UTCThroughputAnalyzer:
             if len(timeline_dates) > 0:
                 metrics["first_date"] = timeline_dates.min()
                 metrics["last_date"] = timeline_dates.max()
-                metrics["processing_days"] = (metrics["last_date"] - metrics["first_date"]).days
+                metrics["processing_days"] = (
+                    metrics["last_date"] - metrics["first_date"]
+                ).days
                 metrics["processing_years"] = metrics["processing_days"] / 365.25
 
                 # Velocity metrics
                 if metrics["processing_days"] > 0:
-                    metrics["velocity_per_year"] = metrics["reference_count"] / max(metrics["processing_years"], 1 / 365.25)
-                    metrics["velocity_per_month"] = metrics["reference_count"] / max(metrics["processing_days"] / 30.44, 1 / 30.44)
+                    metrics["velocity_per_year"] = metrics["reference_count"] / max(
+                        metrics["processing_years"], 1 / 365.25
+                    )
+                    metrics["velocity_per_month"] = metrics["reference_count"] / max(
+                        metrics["processing_days"] / 30.44, 1 / 30.44
+                    )
                 else:
                     metrics["velocity_per_year"] = 0
                     metrics["velocity_per_month"] = 0
@@ -146,7 +201,10 @@ class UTCThroughputAnalyzer:
                 # Dormancy analysis
                 if len(timeline_dates) > 1:
                     sorted_dates = timeline_dates.sort_values()
-                    gaps = [(sorted_dates.iloc[i + 1] - sorted_dates.iloc[i]).days for i in range(len(sorted_dates) - 1)]
+                    gaps = [
+                        (sorted_dates.iloc[i + 1] - sorted_dates.iloc[i]).days
+                        for i in range(len(sorted_dates) - 1)
+                    ]
                     metrics["max_dormancy_days"] = max(gaps) if gaps else 0
                     metrics["avg_gap_days"] = np.mean(gaps) if gaps else 0
                 else:
@@ -165,12 +223,18 @@ class UTCThroughputAnalyzer:
             if len(email_dates) > 0:
                 metrics["first_email_date"] = email_dates.min()
                 metrics["last_email_date"] = email_dates.max()
-                metrics["email_span_days"] = (metrics["last_email_date"] - metrics["first_email_date"]).days
+                metrics["email_span_days"] = (
+                    metrics["last_email_date"] - metrics["first_email_date"]
+                ).days
 
                 # Email confidence
                 if "confidence_score" in email_matches.columns:
-                    metrics["avg_email_confidence"] = email_matches["confidence_score"].mean()
-                    metrics["max_email_confidence"] = email_matches["confidence_score"].max()
+                    metrics["avg_email_confidence"] = email_matches[
+                        "confidence_score"
+                    ].mean()
+                    metrics["max_email_confidence"] = email_matches[
+                        "confidence_score"
+                    ].max()
 
         return metrics
 
@@ -182,13 +246,24 @@ class UTCThroughputAnalyzer:
 
         print("Analyzing individual proposals...")
         for _, row in tqdm(
-            self.emoji_proposal_df.iterrows(), total=len(self.emoji_proposal_df)):
+            self.emoji_proposal_df.iterrows(), total=len(self.emoji_proposal_df)
+        ):
             proposal_id = normalize_doc_num(row["doc_num"])
+            # Exclude proposals in the exclusion list
+            if proposal_id in EXCLUDED_PROPOSALS:
+                continue
             metrics = self.analyze_proposal_processing(proposal_id)
 
             if metrics and metrics.get("first_date"):
+                # Exclude proposals with processing time > 500 days
+                if metrics.get("processing_days", 0) > 500:
+                    continue
                 # Classify by era
-                metrics["era"] = ("pre_2017" if metrics["first_date"] < self.cutoff_date else "post_2017")
+                metrics["era"] = (
+                    "pre_2017"
+                    if metrics["first_date"] < self.cutoff_date
+                    else "post_2017"
+                )
                 metrics["proposal_title"] = row.get("proposal_title", "Unknown")
                 metrics["proposer"] = row.get("proposer", "Unknown")
 
@@ -246,7 +321,9 @@ class UTCThroughputAnalyzer:
 
                 if len(pre_values) > 0 and len(post_values) > 0:
                     # Statistical comparison
-                    stat, p_value = stats.mannwhitneyu(pre_values, post_values, alternative="two-sided")
+                    stat, p_value = stats.mannwhitneyu(
+                        pre_values, post_values, alternative="two-sided"
+                    )
 
                     comparison_results[metric] = {
                         "pre_2017_mean": pre_values.mean(),
@@ -258,7 +335,13 @@ class UTCThroughputAnalyzer:
                         "mannwhitney_u_stat": stat,
                         "p_value": p_value,
                         "significant": p_value < 0.05,
-                        "improvement": ("post_2017" if self._metric_improved(metric, pre_values.mean(), post_values.mean()) else "pre_2017"),
+                        "improvement": (
+                            "post_2017"
+                            if self._metric_improved(
+                                metric, pre_values.mean(), post_values.mean()
+                            )
+                            else "pre_2017"
+                        ),
                     }
 
         return comparison_results
