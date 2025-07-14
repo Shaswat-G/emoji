@@ -171,8 +171,6 @@ def pep8_col(col):
 
 headers = [pep8_col(h) for h in headers]
 
-import re
-
 DOC_REF_PATTERN = re.compile(r"(L2/\d{2}[-‐–—−]\d{3})")
 
 
