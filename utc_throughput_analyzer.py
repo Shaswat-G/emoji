@@ -26,31 +26,29 @@ warnings.filterwarnings("ignore")
 CUT_OFF_DATE = datetime(2017, 1, 1)  # Date to classify proposals before/after
 
 # Proposals to exclude from analysis (highly cited, clouding results)
-EXCLUDED_PROPOSALS = set(
-    [
-        # Normalize all variants
-        "L2/07-257",
-        "L2/09-026",
-        "L2/14-173",
-        "L2/16-160",
-        "L2/16-181",
-        "L2/16-182",
-        "L2/09-379",
-        "L2/09-114",
-        "L2/11-052",
-        "L2/14-174",
-        "L2/15-054",
-        "L2/19-189",
-        "L2/13-207",
-        "L2/15-029",
-        "L2/23-030",
-        "L2/14-093",
-        "L2/16-304",
-        "L2/17-082",
-        "L2/17-011",
-        "L2/16-147",
-    ]
-)
+EXCLUDED_PROPOSALS = {
+    # Normalize all variants
+    "L2/07-257",
+    "L2/09-026",
+    "L2/14-173",
+    "L2/16-160",
+    "L2/16-181",
+    "L2/16-182",
+    "L2/09-379",
+    "L2/09-114",
+    "L2/11-052",
+    "L2/14-174",
+    "L2/15-054",
+    "L2/19-189",
+    "L2/13-207",
+    "L2/15-029",
+    "L2/23-030",
+    "L2/14-093",
+    "L2/16-304",
+    "L2/17-082",
+    "L2/17-011",
+    "L2/16-147",
+}
 
 # Import functions from the triangulator
 from utc_proposal_triangulator import (
