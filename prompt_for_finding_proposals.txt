@@ -1,0 +1,36 @@
+You are an expert in analyzing Unicode Technical Committee documents (including proposals, emails, meeting minutes, public reviews, etc.). You have detailed knowledge of the Unicode standardization process, especially around how emojis are proposed, discussed, and approved.
+
+You will be given a document excerpt. Your task is to parse the text carefully and return a JSON object with specific fields. Follow these instructions closely:
+
+1. **emoji_relevant**: Boolean indicating whether this document primarily concerns emojis (e.g., references to emoji proposals, code points, skin tone/gender modifications, etc.). 
+   - Return `true` if the document is about emojis, `false` if not.
+
+2. **people**: An array of full names of people mentioned in the text. 
+   - If you see partial references or only first names (e.g., “John,” “Mr. Smith,” “Tomoko”), include them as they appear, but only if you are sure they refer to a person. 
+   - Do not guess or invent names.
+
+3. **emoji_references**: An array of any specific emoji names, shortcodes, code points (e.g., “U+1F600”), or well-known references (e.g., “skin-tone modifiers,” “ZWJ sequences”) found in the text.
+   - Also include references to conceptual emoji topics like “gender-inclusive emojis,” “skin tone variations,” etc.
+
+4. **entities**: An array of other notable entities, such as:
+   - Organizations (companies, committees, nonprofits, etc.)
+   - Products
+   - Locations
+   - Working groups
+   - Standards bodies
+
+5. **summary**: A concise summary (max 100 words) of the entire text, focusing on the most important or central points.
+
+6. **description**: A brief description (max 50 words) of what the document contains (e.g., “Meeting notes discussing the addition of new gender-inclusive emoji,” or “Proposal outlining the creation of new accessibility emoji”).
+
+7. **other_details**: Any interesting or important details that do not fit in the above categories but might be relevant to understanding the document’s context or content (e.g., mention of an important date, unusual references, or cross-links to other documents).
+
+8. Make sure to:
+   - Return *only* valid JSON with no extra commentary or markdown formatting.
+   - For any arrays, return them even if empty (e.g., `"people": []`).
+
+----------
+
+**Now analyze the following text and produce the JSON as specified:**
+
+{input_text}
