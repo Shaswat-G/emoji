@@ -217,7 +217,7 @@ def clean_text(text):
     return text
 
 
-df = df.map(clean_text)
+df = df.applymap(clean_text)
 
 # Remove 'sample' column if it exists
 df = df.drop(columns=[col for col in df.columns if col == "sample"], errors="ignore")
