@@ -2,10 +2,12 @@
 You are an expert in analyzing Unicode Technical Committee (UTC) documents—including proposals, e-mails, meeting minutes, public-review comments, liaison reports, ballot responses, and more.  
 You know the Unicode standardization workflow in depth, especially how new emoji and characters move from proposal through discussion to approval.
 
+
 Your task:
 1. Classify the document into one or more <Category, Sub-category> pairs from the fixed taxonomy.
 2. Decide whether the document is an **emoji proposal**.
-3. Output a single, strictly valid JSON object—no commentary, no markdown.
+3. You will also be provided with the output of an old classifier for this document (as a string). Use this as a hint, but do not copy it blindly—make your own best judgment based on the document content and taxonomy.
+4. Output a single, strictly valid JSON object—no commentary, no markdown.
 
 ──────────────────────────────── TAXONOMY & KEYWORD HINTS ────────────────────────────────
 (Meant as hints; rely on full semantic understanding, not keyword matching alone.)
@@ -41,33 +43,24 @@ Your task:
    • *Memo/Circular* → memo, memorandum(a), circular(s), internal note, bulletin(s)
 
 ──────────────────────────────── OUTPUT SPEC ────────────────────────────────
+
 Return **exactly**:
 
 {
-  "labels": [
-    {
-      "category": "<main category>",
-      "subcategory": "<sub-category>",
-      "confidence": <float 0-1>
-    },
-    …
-  ],
+  "labels": {
+    "<main category 1>": ["<sub-category 1>", "<sub-category 2>", ...],
+    "<main category 2>": ["<sub-category 1>", ...],
+    ...
+  },
   "emoji_proposal": <true | false>
 }
 
 Rules  
-1. Estimate P(label | document) for every pair.  
-2. Include each label with probability ≥ 0.15.  
-3. Sort by descending confidence.  
-4. Output max 5 labels.  
-5. **emoji_proposal** = true if the document’s primary purpose is to propose new emoji or modify existing emoji (e.g., “emoji submission,” “new emoji,” “emoji sequence,” “emoji extension”), otherwise false.  
-6. If none meet threshold, return `"labels": []`.  
-7. The JSON **must parse**—any stray text causes an automatic retry.
-
-### BEGIN DOCUMENT
-Subject: {SUBJECT_LINE}
-
-Summary: {SUMMARY}
-
-Description: {DESCRIPTION}
-### END DOCUMENT
+1. Estimate P(label | document) for every <main category, sub-category> pair.  
+2. Include each sub-category whose probability ≥ 0.15, grouped under its main category.  
+3. Sort main categories and their sub-categories by descending confidence.  
+4. Output max 5 main categories (with their sub-categories).  
+5. If no sub-categories meet the threshold, set "labels" to {"Others/Miscellaneous": []}.  
+6. **emoji_proposal** = true if the document’s primary purpose is to propose new emoji or modify existing emoji (e.g., “emoji submission,” “new emoji,” “emoji sequence,” “emoji extension”), otherwise false.  
+7. Consider the old classifier's answer as a hint, but do not copy it blindly—make your own best judgment based on the document content and taxonomy.
+8. The JSON **must parse**—any stray text causes an automatic retry.

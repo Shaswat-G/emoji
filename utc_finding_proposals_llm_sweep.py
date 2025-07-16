@@ -49,7 +49,7 @@ def load_api_key(api_key_path):
         return None
 
 
-def call_llm_api(client, config, prompt):
+def call_llm_api(client, config, system_prompt, user_prompt):
     """Call LLM API with proper error handling using an existing client."""
     try:
         response_format = (
@@ -57,7 +57,10 @@ def call_llm_api(client, config, prompt):
             if config["response_format"] == "json_object"
             else None
         )
-        messages = [{"role": config["role"], "content": prompt}]
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
         response = client.chat.completions.create(
             model=config["model"],
@@ -94,71 +97,47 @@ def call_llm_api(client, config, prompt):
         return None, None, 0, str(e)
 
 
-# Document processing functions
-def read_file_content(doc_num, folder_path):
-    """Read content from a text file with error handling."""
-    doc_num = doc_num.replace("/", "_")
-    file_path = os.path.join(folder_path, f"{doc_num}.txt")
-    try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            return file.read()
-    except Exception as e:
-        return ""
-
-
-def create_extraction_prompt(text, prompt_template):
+def create_extraction_prompt(text: dict, prompt_template):
     """Create a prompt for entity extraction."""
-    # Limit text length to avoid token limits
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS] + "... [truncated]"
+    subject = text.get("subject", "")
+    summary = text.get("summary", "")
+    description = text.get("description", "")
+    old_classifier_answer = text.get("old_classifier_answer", "")
+
+    return prompt_template.format(
+        SUBJECT_LINE=subject, SUMMARY=summary, DESCRIPTION=description,
+        OLD_CLASSIFIER_ANSWER=old_classifier_answer
+    )
 
     return prompt_template.format(input_text=text)
 
 
-def process_row(row_data, client, config, prompt_template, folder_path):
+def process_row(row_data, client, config, system_prompt, user_prompt_template):
     """Process a single row with error handling."""
     idx, row = row_data
     result = {
         "idx": idx,
-        "is_emoji_proposal": False,  # Main field we're looking for
+        "is_emoji_proposal": False,
+        "document_classification": None,
         "processing_error": None,
-        "token_usage": None,
-        "api_cost": 0,
     }
 
     if pd.isnull(row.get("error_message", "")):
         try:
-            # Read text file content but don't store it in the result
-            text = read_file_content(row["doc_num"], folder_path)
+            text = {
+                "subject": row.get("subject", ""),
+                "summary": row.get("summary", ""),
+                "description": row.get("description", ""),
+                "old_classifier_answer": row.get("doc_type", ""),
+            }
+            user_prompt = create_extraction_prompt(text, user_prompt_template)
+            content, tokens, cost, error = call_llm_api(client, config, system_prompt, user_prompt)
 
-            if text and len(text.strip()) > 0:
-                # Create prompt for LLM
-                prompt = create_extraction_prompt(text, prompt_template)
-
-                # Call LLM API with existing client
-                content, tokens, cost, error = call_llm_api(client, config, prompt)
-
-                if error:
-                    result["processing_error"] = f"API error: {error}"
-                elif content:
-                    # Extract the required fields from the API response
-                    if isinstance(content, dict):
-                        result["is_emoji_proposal"] = content.get(
-                            "is_emoji_proposal", False
-                        )
-                    else:
-                        result["processing_error"] = (
-                            "Response format error: Expected JSON object"
-                        )
-
-                    # Store token usage and cost information
-                    result["token_usage"] = tokens
-                    result["api_cost"] = cost
-                else:
-                    result["processing_error"] = "No content returned from API"
-            else:
-                result["processing_error"] = "Empty or invalid text content"
-
+            if error:
+                result["processing_error"] = f"API error: {error}"
+            elif content:
+                result["is_emoji_proposal"] = content.get("emoji_proposal", False)
+                result["document_classification"] = content.get("labels", None)
         except Exception as e:
             result["processing_error"] = f"Processing error: {str(e)}"
 
@@ -238,7 +217,9 @@ def safe_save_to_excel(df, file_path, csv_backup=True):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
+    )
 
     config = load_config("config_for_finding_proposals.yml")
     if config is None:
@@ -248,30 +229,25 @@ if __name__ == "__main__":
         if api_key is None:
             logging.error("Exiting due to missing API key.")
         else:
-            prompt_template = load_file(config["prompt_path"])
-            if prompt_template is None:
+            user_prompt_template = load_file(config["user_prompt_path"])
+            system_prompt = load_file(config["system_prompt_path"])
+            if user_prompt_template is None:
                 logging.error("Exiting due to missing prompt template.")
             else:
                 client = OpenAI(api_key=api_key)
 
                 base_path = os.getcwd()
-                folder_name = "extracted_texts"
-                folder_path = os.path.join(base_path, folder_name)
-
                 file_name = "utc_register_with_llm_extraction.xlsx"
                 file_path = os.path.join(base_path, file_name)
 
                 logging.info("Loading data...")
-                df = pd.read_excel(file_path)
+                df = pd.read_excel(file_path).sample(20).reset_index(drop=True)
 
+                df["document_classification"] = None
                 df["is_emoji_proposal"] = False
                 df["processing_error"] = None
-                df["token_usage"] = None
-                df["api_cost"] = 0.0
 
-                total_rows = len(df)
-
-                total_cost = 0.0
+                total_rows = df.shape[0]
                 logging.info(f"Processing {total_rows} rows")
 
                 # Process rows sequentially (BATCH_SIZE is 1 for now)
@@ -282,35 +258,34 @@ if __name__ == "__main__":
                     try:
                         row_data = (i, row)
                         result = process_row(
-                            row_data, client, config, prompt_template, folder_path
+                            row_data,
+                            client,
+                            config,
+                            system_prompt,
+                            user_prompt_template,
                         )
 
                         # Update the dataframe with results
                         df.at[i, "is_emoji_proposal"] = result["is_emoji_proposal"]
                         df.at[i, "processing_error"] = result["processing_error"]
-                        df.at[i, "token_usage"] = result["token_usage"]
-                        df.at[i, "api_cost"] = result["api_cost"]
-
-                        total_cost += result["api_cost"]
+                        df.at[i, "document_classification"] = result[
+                            "document_classification"
+                        ]
 
                     except Exception as e:
                         df.at[i, "processing_error"] = f"Row processing error: {str(e)}"
 
                     # Save intermediate results every INTERIM_SAVE_INTERVAL rows
                     if i % INTERIM_SAVE_INTERVAL == 0 and i > 0:
-                        interim_file_name = f"utc_register_with_proposal_classification_interim_{i}.xlsx"
+                        interim_file_name = f"utc_register_with_llm_document_classification_interim_{i}.xlsx"
                         interim_path = os.path.join(base_path, interim_file_name)
                         if safe_save_to_excel(df, interim_path):
                             logging.info(f"Saved interim results at row {i}")
 
                 # Save final results
-                output_file_name = "utc_register_with_proposal_classification.xlsx"
+                output_file_name = "utc_register_with_llm_document_classification.xlsx"
                 output_path = os.path.join(base_path, output_file_name)
                 if safe_save_to_excel(df, output_path):
                     logging.info(f"Processing complete. Results saved successfully.")
                 else:
-                    logging.error(
-                        f"Processing complete but encountered issues saving results."
-                    )
-
-                logging.info(f"Total API cost: ${total_cost:.4f}")
+                    logging.error(f"Processing complete but encountered issues saving results.")
