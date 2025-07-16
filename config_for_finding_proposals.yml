@@ -1,10 +1,10 @@
 # Paths
-prompt_path: "prompt_for_finding_proposals.txt"
+system_prompt_path: "system_prompt_for_finding_proposals.txt"
+user_prompt_path: "user_prompt_for_finding_proposals.txt"
 api_key_path: "api_key.txt"
 
 # API settings
 model: "gpt-4o-mini-2024-07-18"
-role: "user"
 response_format: "json_object" # "json_object" or null for text
 
 # Generation settings

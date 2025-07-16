@@ -1,0 +1,9 @@
+### BEGIN DOCUMENT
+Subject: {SUBJECT_LINE}
+
+Summary: {SUMMARY}
+
+Description: {DESCRIPTION}
+
+Old classifier answer: {OLD_CLASSIFIER_ANSWER}
+### END DOCUMENT
