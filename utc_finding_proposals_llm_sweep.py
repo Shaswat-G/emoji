@@ -238,11 +238,9 @@ def safe_save_to_excel(df, file_path, csv_backup=True):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-    config = load_config()
+    config = load_config("config_for_finding_proposals.yml")
     if config is None:
         logging.error("Exiting due to missing config.")
     else:
