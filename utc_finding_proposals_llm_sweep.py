@@ -6,7 +6,15 @@ import numpy as np
 from tqdm import tqdm
 import re
 import csv
+import logging
 from openai import OpenAI
+
+# ------------------ Configurable Constants ------------------
+BATCH_SIZE = 1  # For future batch processing, currently sequential
+MAX_CHARS = 12000  # Max chars for LLM prompt input
+INTERIM_SAVE_INTERVAL = 100  # Save every N rows
+
+# -----------------------------------------------------------
 
 
 # General File reads
@@ -16,8 +24,8 @@ def load_file(file_path, encoding="utf-8"):
         with open(file_path, "r", encoding=encoding) as file:
             return file.read()
     except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
-        exit(1)
+        logging.error(f"Error: File '{file_path}' not found.")
+        return None
 
 
 # Configuration and API functions
@@ -27,8 +35,8 @@ def load_config(config_path="config.yml"):
         with open(config_path, "r", encoding="utf-8") as file:
             return yaml.safe_load(file)
     except FileNotFoundError:
-        print(f"Error: Configuration file '{config_path}' not found.")
-        exit(1)
+        logging.error(f"Error: Configuration file '{config_path}' not found.")
+        return None
 
 
 def load_api_key(api_key_path):
@@ -37,8 +45,8 @@ def load_api_key(api_key_path):
         with open(api_key_path, "r", encoding="utf-8") as file:
             return file.read().strip()
     except FileNotFoundError:
-        print(f"Error: API key file '{api_key_path}' not found.")
-        exit(1)
+        logging.error(f"Error: API key file '{api_key_path}' not found.")
+        return None
 
 
 def call_llm_api(client, config, prompt):
@@ -101,9 +109,8 @@ def read_file_content(doc_num, folder_path):
 def create_extraction_prompt(text, prompt_template):
     """Create a prompt for entity extraction."""
     # Limit text length to avoid token limits
-    max_chars = 12000  # Approximate limit to keep within token limits
-    if len(text) > max_chars:
-        text = text[:max_chars] + "... [truncated]"
+    if len(text) > MAX_CHARS:
+        text = text[:MAX_CHARS] + "... [truncated]"
 
     return prompt_template.format(input_text=text)
 
@@ -231,68 +238,81 @@ def safe_save_to_excel(df, file_path, csv_backup=True):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
+    )
 
     config = load_config()
-    api_key = load_api_key(config["api_key_path"])
-    prompt_template = load_file(config["prompt_path"])
-
-    client = OpenAI(api_key=api_key)
-
-    base_path = os.getcwd()
-    folder_name = "extracted_texts"
-    folder_path = os.path.join(base_path, folder_name)
-
-    file_name = "utc_register_with_llm_extraction.xlsx"
-    file_path = os.path.join(base_path, file_name)
-
-    print("Loading data...")
-    df = pd.read_excel(file_path)
-
-    df["is_emoji_proposal"] = False
-    df["processing_error"] = None
-    df["token_usage"] = None
-    df["api_cost"] = 0.0
-
-    total_rows = len(df)
-
-    total_cost = 0.0
-    print(f"Processing {total_rows} rows")
-
-    # Process rows sequentially
-    for i in tqdm(range(total_rows)):
-        row = df.iloc[i]
-
-        # Process this row using LLM
-        try:
-            row_data = (i, row)
-            result = process_row(row_data, client, config, prompt_template, folder_path)
-
-            # Update the dataframe with results
-            df.at[i, "is_emoji_proposal"] = result["is_emoji_proposal"]
-            df.at[i, "processing_error"] = result["processing_error"]
-            df.at[i, "token_usage"] = result["token_usage"]
-            df.at[i, "api_cost"] = result["api_cost"]
-
-            total_cost += result["api_cost"]
-
-        except Exception as e:
-            df.at[i, "processing_error"] = f"Row processing error: {str(e)}"
-
-        # Save intermediate results every 100 rows
-        if i % 100 == 0 and i > 0:
-            interim_file_name = (
-                f"utc_register_with_proposal_classification_interim_{i}.xlsx"
-            )
-            interim_path = os.path.join(base_path, interim_file_name)
-            if safe_save_to_excel(df, interim_path):
-                print(f"Saved interim results at row {i}")
-
-    # Save final results
-    output_file_name = "utc_register_with_proposal_classification.xlsx"
-    output_path = os.path.join(base_path, output_file_name)
-    if safe_save_to_excel(df, output_path):
-        print(f"Processing complete. Results saved successfully.")
+    if config is None:
+        logging.error("Exiting due to missing config.")
     else:
-        print(f"Processing complete but encountered issues saving results.")
+        api_key = load_api_key(config["api_key_path"])
+        if api_key is None:
+            logging.error("Exiting due to missing API key.")
+        else:
+            prompt_template = load_file(config["prompt_path"])
+            if prompt_template is None:
+                logging.error("Exiting due to missing prompt template.")
+            else:
+                client = OpenAI(api_key=api_key)
 
-    print(f"Total API cost: ${total_cost:.4f}")
+                base_path = os.getcwd()
+                folder_name = "extracted_texts"
+                folder_path = os.path.join(base_path, folder_name)
+
+                file_name = "utc_register_with_llm_extraction.xlsx"
+                file_path = os.path.join(base_path, file_name)
+
+                logging.info("Loading data...")
+                df = pd.read_excel(file_path)
+
+                df["is_emoji_proposal"] = False
+                df["processing_error"] = None
+                df["token_usage"] = None
+                df["api_cost"] = 0.0
+
+                total_rows = len(df)
+
+                total_cost = 0.0
+                logging.info(f"Processing {total_rows} rows")
+
+                # Process rows sequentially (BATCH_SIZE is 1 for now)
+                for i in tqdm(range(total_rows)):
+                    row = df.iloc[i]
+
+                    # Process this row using LLM
+                    try:
+                        row_data = (i, row)
+                        result = process_row(
+                            row_data, client, config, prompt_template, folder_path
+                        )
+
+                        # Update the dataframe with results
+                        df.at[i, "is_emoji_proposal"] = result["is_emoji_proposal"]
+                        df.at[i, "processing_error"] = result["processing_error"]
+                        df.at[i, "token_usage"] = result["token_usage"]
+                        df.at[i, "api_cost"] = result["api_cost"]
+
+                        total_cost += result["api_cost"]
+
+                    except Exception as e:
+                        df.at[i, "processing_error"] = f"Row processing error: {str(e)}"
+
+                    # Save intermediate results every INTERIM_SAVE_INTERVAL rows
+                    if i % INTERIM_SAVE_INTERVAL == 0 and i > 0:
+                        interim_file_name = f"utc_register_with_proposal_classification_interim_{i}.xlsx"
+                        interim_path = os.path.join(base_path, interim_file_name)
+                        if safe_save_to_excel(df, interim_path):
+                            logging.info(f"Saved interim results at row {i}")
+
+                # Save final results
+                output_file_name = "utc_register_with_proposal_classification.xlsx"
+                output_path = os.path.join(base_path, output_file_name)
+                if safe_save_to_excel(df, output_path):
+                    logging.info(f"Processing complete. Results saved successfully.")
+                else:
+                    logging.error(
+                        f"Processing complete but encountered issues saving results."
+                    )
+
+                logging.info(f"Total API cost: ${total_cost:.4f}")
