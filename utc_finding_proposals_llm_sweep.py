@@ -114,9 +114,6 @@ def create_extraction_prompt(text: dict, prompt_template):
         OLD_CLASSIFIER_ANSWER=old_classifier_answer,
     )
 
-    return prompt_template.format(input_text=text)
-
-
 def process_row(row_data, client, config, system_prompt, user_prompt_template):
     """Process a single row with error handling."""
     idx, row = row_data
