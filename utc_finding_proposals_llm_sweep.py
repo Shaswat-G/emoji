@@ -9,12 +9,14 @@ import csv
 import logging
 from openai import OpenAI
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 
 # ------------------ Configurable Constants ------------------
 BATCH_SIZE = 4  # Number of rows per batch
-NUM_WORKERS = 4  # Number of parallel workers
 MAX_CHARS = 12000  # Max chars for LLM prompt input
 INTERIM_SAVE_INTERVAL = 4  # Save every batch for testing
+# Detect number of CPU cores and set number of workers
+NUM_WORKERS = 2 * multiprocessing.cpu_count()
 # -----------------------------------------------------------
 
 
@@ -261,7 +263,7 @@ if __name__ == "__main__":
                 file_path = os.path.join(base_path, file_name)
 
                 logging.info("Loading data...")
-                df = pd.read_excel(file_path).sample(16).reset_index(drop=True)
+                df = pd.read_excel(file_path).sample(20).reset_index(drop=True)
 
                 df["document_classification"] = None
                 df["is_emoji_proposal"] = False
@@ -270,13 +272,15 @@ if __name__ == "__main__":
                 total_rows = df.shape[0]
                 logging.info(f"Processing {total_rows} rows")
 
-                # Split into batches
+                # Modulo-based assignment of rows to workers
+                worker_indices = [
+                    [i for i in range(total_rows) if i % NUM_WORKERS == worker_id]
+                    for worker_id in range(NUM_WORKERS)
+                ]
                 batches = [
-                    (
-                        df.iloc[i : i + BATCH_SIZE].copy(),
-                        list(range(i, min(i + BATCH_SIZE, total_rows))),
-                    )
-                    for i in range(0, total_rows, BATCH_SIZE)
+                    (df.iloc[indices].copy(), indices)
+                    for indices in worker_indices
+                    if indices
                 ]
 
                 # Function for worker
@@ -292,6 +296,9 @@ if __name__ == "__main__":
 
                 # Run batches in parallel
                 all_results = [None] * len(batches)
+                logging.info(
+                    f"Detected {NUM_WORKERS//2} CPU cores. Using {NUM_WORKERS} workers for batch processing."
+                )
                 with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
                     future_to_batch = {
                         executor.submit(worker, batch_df, batch_indices): idx
@@ -302,10 +309,14 @@ if __name__ == "__main__":
                         try:
                             batch_result_df = future.result()
                             all_results[batch_idx] = batch_result_df
-                            # Save interim after each batch
+                            # Save interim: only batch results
                             interim_file_name = f"utc_register_with_llm_document_classification_interim_batch_{batch_idx}.xlsx"
                             interim_path = os.path.join(base_path, interim_file_name)
-                            # Merge interim results with original df for saving
+                            safe_save_to_excel(batch_result_df, interim_path)
+                            logging.info(
+                                f"Saved interim batch results for batch {batch_idx}"
+                            )
+                            # Merge batch results into main df for final output
                             for _, row in batch_result_df.iterrows():
                                 i = row["idx"]
                                 df.at[i, "is_emoji_proposal"] = row["is_emoji_proposal"]
@@ -313,8 +324,6 @@ if __name__ == "__main__":
                                 df.at[i, "document_classification"] = row[
                                     "document_classification"
                                 ]
-                            safe_save_to_excel(df, interim_path)
-                            logging.info(f"Saved interim results for batch {batch_idx}")
                         except Exception as e:
                             logging.error(f"Batch {batch_idx} failed: {str(e)}")
 
