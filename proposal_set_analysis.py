@@ -38,7 +38,9 @@ def filter_emoji_proposals(df):
     return proposals_mask & (df["emoji_relevant"] == True)
 
 
-all_identified_emoji_proposals = load_set_from_excel("utc_register_with_llm_extraction.xlsx", "doc_num", filter_emoji_proposals)
+all_identified_emoji_proposals = load_set_from_excel(
+    "utc_register_with_llm_extraction.xlsx", "doc_num", filter_emoji_proposals
+)
 charlotte_buff_rejected = load_set_from_csv("rejected_proposals.csv", "document")
 known_accepted_proposals = load_set_from_csv("emoji_proposal_table.csv", "doc_num")
 
@@ -52,9 +54,15 @@ accepted_missing = known_accepted_proposals - all_identified_emoji_proposals
 false_rejects = known_accepted_proposals.intersection(charlotte_buff_rejected)
 
 # Metrics
-our_recall = (len(accepted_found) / len(known_accepted_proposals) * 100 if known_accepted_proposals else 0)
-cb_recall = (len(overlap) / len(calculated_rejected) * 100 if calculated_rejected else 0)
-cb_precision = (len(overlap) / len(charlotte_buff_rejected) * 100 if charlotte_buff_rejected else 0)
+our_recall = (
+    len(accepted_found) / len(known_accepted_proposals) * 100
+    if known_accepted_proposals
+    else 0
+)
+cb_recall = len(overlap) / len(calculated_rejected) * 100 if calculated_rejected else 0
+cb_precision = (
+    len(overlap) / len(charlotte_buff_rejected) * 100 if charlotte_buff_rejected else 0
+)
 
 # Results
 print("EMOJI PROPOSAL SET ANALYSIS")
@@ -64,8 +72,58 @@ print(f"Charlotte Buff's rejected list: {len(charlotte_buff_rejected)}")
 print(f"Known accepted proposals: {len(known_accepted_proposals)}")
 print(f"Calculated rejected proposals: {len(calculated_rejected)}")
 
+print(f"\nIDENTIFICATION SYSTEM ACCURACY ANALYSIS:")
+print("=" * 50)
+print(f"Known accepted proposals found by our system: {len(accepted_found)}")
+print(f"Known accepted proposals missed by our system: {len(accepted_missing)}")
+print(f"Our system recall on accepted proposals: {our_recall:.1f}%")
+
+if len(all_identified_emoji_proposals) > 0:
+    acceptance_rate_identified = (
+        len(accepted_found) / len(all_identified_emoji_proposals) * 100
+    )
+    print(f"Acceptance rate in our identified set: {acceptance_rate_identified:.1f}%")
+
+if len(known_accepted_proposals) > 0:
+    total_acceptance_rate = (
+        len(known_accepted_proposals)
+        / (len(known_accepted_proposals) + len(charlotte_buff_rejected))
+        * 100
+        if charlotte_buff_rejected
+        else 100
+    )
+    print(f"Overall acceptance rate (known data): {total_acceptance_rate:.1f}%")
+
+# Analysis of what we're missing
+if accepted_missing:
+    print(f"\nMISSED ACCEPTED PROPOSALS ANALYSIS:")
+    print(f"We missed {len(accepted_missing)} accepted proposals")
+    print(f"Sample missed accepted proposals:")
+    for doc in list(accepted_missing)[:10]:
+        print(f"  {doc}")
+
+# Analysis of identification quality
+extra_identified = (
+    all_identified_emoji_proposals - known_accepted_proposals - charlotte_buff_rejected
+)
+print(f"\nIDENTIFICATION QUALITY:")
+print(f"Novel proposals identified (not in any known list): {len(extra_identified)}")
+if extra_identified:
+    print(f"Sample novel identifications:")
+    for doc in list(extra_identified)[:10]:
+        print(f"  {doc}")
+
+# Completeness estimation
+if our_recall > 0:
+    estimated_total_accepted = len(known_accepted_proposals) / (our_recall / 100)
+    estimated_missing_accepted = estimated_total_accepted - len(
+        known_accepted_proposals
+    )
+    print(f"\nCOMPLETENESS ESTIMATION:")
+    print(f"Estimated total accepted proposals: {estimated_total_accepted:.0f}")
+    print(f"Estimated missing from accepted list: {estimated_missing_accepted:.0f}")
+
 print(f"\nVALIDATION:")
-print(f"Our recall (accepted found): {our_recall:.1f}%")
 print(f"CB recall (rejected found): {cb_recall:.1f}%")
 print(f"CB precision: {cb_precision:.1f}%")
 print(f"Missing from CB's list: {len(missing_from_cb)}")
