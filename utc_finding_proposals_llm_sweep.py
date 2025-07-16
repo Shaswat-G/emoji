@@ -8,12 +8,13 @@ import re
 import csv
 import logging
 from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ------------------ Configurable Constants ------------------
-BATCH_SIZE = 1  # For future batch processing, currently sequential
+BATCH_SIZE = 4  # Number of rows per batch
+NUM_WORKERS = 4  # Number of parallel workers
 MAX_CHARS = 12000  # Max chars for LLM prompt input
-INTERIM_SAVE_INTERVAL = 100  # Save every N rows
-
+INTERIM_SAVE_INTERVAL = 4  # Save every batch for testing
 # -----------------------------------------------------------
 
 
@@ -105,8 +106,10 @@ def create_extraction_prompt(text: dict, prompt_template):
     old_classifier_answer = text.get("old_classifier_answer", "")
 
     return prompt_template.format(
-        SUBJECT_LINE=subject, SUMMARY=summary, DESCRIPTION=description,
-        OLD_CLASSIFIER_ANSWER=old_classifier_answer
+        SUBJECT_LINE=subject,
+        SUMMARY=summary,
+        DESCRIPTION=description,
+        OLD_CLASSIFIER_ANSWER=old_classifier_answer,
     )
 
     return prompt_template.format(input_text=text)
@@ -131,7 +134,9 @@ def process_row(row_data, client, config, system_prompt, user_prompt_template):
                 "old_classifier_answer": row.get("doc_type", ""),
             }
             user_prompt = create_extraction_prompt(text, user_prompt_template)
-            content, tokens, cost, error = call_llm_api(client, config, system_prompt, user_prompt)
+            content, tokens, cost, error = call_llm_api(
+                client, config, system_prompt, user_prompt
+            )
 
             if error:
                 result["processing_error"] = f"API error: {error}"
@@ -142,6 +147,21 @@ def process_row(row_data, client, config, system_prompt, user_prompt_template):
             result["processing_error"] = f"Processing error: {str(e)}"
 
     return result
+
+
+def process_batch(
+    batch_df, batch_indices, client, config, system_prompt, user_prompt_template
+):
+    """Process a batch of rows and return results as a DataFrame."""
+    results = []
+    for i, row in zip(batch_indices, batch_df.itertuples(index=False)):
+        row_dict = row._asdict() if hasattr(row, "_asdict") else dict(row)
+        result = process_row(
+            (i, row_dict), client, config, system_prompt, user_prompt_template
+        )
+        results.append(result)
+    batch_result_df = pd.DataFrame(results)
+    return batch_result_df
 
 
 def remove_illegal_characters(text):
@@ -241,7 +261,7 @@ if __name__ == "__main__":
                 file_path = os.path.join(base_path, file_name)
 
                 logging.info("Loading data...")
-                df = pd.read_excel(file_path).sample(20).reset_index(drop=True)
+                df = pd.read_excel(file_path).sample(16).reset_index(drop=True)
 
                 df["document_classification"] = None
                 df["is_emoji_proposal"] = False
@@ -250,37 +270,53 @@ if __name__ == "__main__":
                 total_rows = df.shape[0]
                 logging.info(f"Processing {total_rows} rows")
 
-                # Process rows sequentially (BATCH_SIZE is 1 for now)
-                for i in tqdm(range(total_rows)):
-                    row = df.iloc[i]
+                # Split into batches
+                batches = [
+                    (
+                        df.iloc[i : i + BATCH_SIZE].copy(),
+                        list(range(i, min(i + BATCH_SIZE, total_rows))),
+                    )
+                    for i in range(0, total_rows, BATCH_SIZE)
+                ]
 
-                    # Process this row using LLM
-                    try:
-                        row_data = (i, row)
-                        result = process_row(
-                            row_data,
-                            client,
-                            config,
-                            system_prompt,
-                            user_prompt_template,
-                        )
+                # Function for worker
+                def worker(batch_df, batch_indices):
+                    return process_batch(
+                        batch_df,
+                        batch_indices,
+                        client,
+                        config,
+                        system_prompt,
+                        user_prompt_template,
+                    )
 
-                        # Update the dataframe with results
-                        df.at[i, "is_emoji_proposal"] = result["is_emoji_proposal"]
-                        df.at[i, "processing_error"] = result["processing_error"]
-                        df.at[i, "document_classification"] = result[
-                            "document_classification"
-                        ]
-
-                    except Exception as e:
-                        df.at[i, "processing_error"] = f"Row processing error: {str(e)}"
-
-                    # Save intermediate results every INTERIM_SAVE_INTERVAL rows
-                    if i % INTERIM_SAVE_INTERVAL == 0 and i > 0:
-                        interim_file_name = f"utc_register_with_llm_document_classification_interim_{i}.xlsx"
-                        interim_path = os.path.join(base_path, interim_file_name)
-                        if safe_save_to_excel(df, interim_path):
-                            logging.info(f"Saved interim results at row {i}")
+                # Run batches in parallel
+                all_results = [None] * len(batches)
+                with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
+                    future_to_batch = {
+                        executor.submit(worker, batch_df, batch_indices): idx
+                        for idx, (batch_df, batch_indices) in enumerate(batches)
+                    }
+                    for future in as_completed(future_to_batch):
+                        batch_idx = future_to_batch[future]
+                        try:
+                            batch_result_df = future.result()
+                            all_results[batch_idx] = batch_result_df
+                            # Save interim after each batch
+                            interim_file_name = f"utc_register_with_llm_document_classification_interim_batch_{batch_idx}.xlsx"
+                            interim_path = os.path.join(base_path, interim_file_name)
+                            # Merge interim results with original df for saving
+                            for _, row in batch_result_df.iterrows():
+                                i = row["idx"]
+                                df.at[i, "is_emoji_proposal"] = row["is_emoji_proposal"]
+                                df.at[i, "processing_error"] = row["processing_error"]
+                                df.at[i, "document_classification"] = row[
+                                    "document_classification"
+                                ]
+                            safe_save_to_excel(df, interim_path)
+                            logging.info(f"Saved interim results for batch {batch_idx}")
+                        except Exception as e:
+                            logging.error(f"Batch {batch_idx} failed: {str(e)}")
 
                 # Save final results
                 output_file_name = "utc_register_with_llm_document_classification.xlsx"
@@ -288,4 +324,6 @@ if __name__ == "__main__":
                 if safe_save_to_excel(df, output_path):
                     logging.info(f"Processing complete. Results saved successfully.")
                 else:
-                    logging.error(f"Processing complete but encountered issues saving results.")
+                    logging.error(
+                        f"Processing complete but encountered issues saving results."
+                    )
