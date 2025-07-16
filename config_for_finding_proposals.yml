@@ -4,7 +4,7 @@ api_key_path: "api_key.txt"
 
 # API settings
 model: "gpt-4o-mini-2024-07-18"
-role: "user"
+role: "system"
 response_format: "json_object" # "json_object" or null for text
 
 # Generation settings
