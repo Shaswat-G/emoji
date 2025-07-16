@@ -5,7 +5,7 @@ You know the Unicode standardization workflow in depth, especially how new emoji
 
 Your task:
 1. Classify the document into one or more <Category, Sub-category> pairs from the fixed taxonomy.
-2. Decide whether the document is an **emoji proposal**.
+2. Decide whether the document is an **emoji proposal** from outside the organization. It should not be a proposal from the Emoji subcommittee or Emoji Ad-hoc committee, or UTC or any meeting documents. It should propose a particular emoji or set of emojis, themed or otherwise.
 3. You will also be provided with the output of an old classifier for this document (as a string). Use this as a hint, but do not copy it blindly—make your own best judgment based on the document content and taxonomy.
 4. Output a single, strictly valid JSON object—no commentary, no markdown.
 
