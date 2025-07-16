@@ -263,7 +263,8 @@ if __name__ == "__main__":
                 file_path = os.path.join(base_path, file_name)
 
                 logging.info("Loading data...")
-                df = pd.read_excel(file_path).sample(20).reset_index(drop=True)
+                # df = pd.read_excel(file_path).sample(20).reset_index(drop=True)
+                df = pd.read_excel(file_path)
 
                 df["document_classification"] = None
                 df["is_emoji_proposal"] = False
