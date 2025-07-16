@@ -23,26 +23,48 @@ def load_set_from_excel(filename, column, filter_func=None):
     return set(df[column].dropna())
 
 
-def load_set_from_csv(filename, column):
+def load_set_from_csv(filename, column, filter_func=None):
     """Load a set from CSV file"""
     df = pd.read_csv(os.path.join(os.getcwd(), filename))
+    if filter_func:
+        df = df[filter_func(df)]
     return set(df[column].dropna())
 
 
-# Load all three sets
-def filter_emoji_proposals(df):
-    df["doc_type"] = df["doc_type"].apply(safe_literal_eval)
-    proposals_mask = df["doc_type"].apply(
-        lambda x: "Proposals" in x if isinstance(x, dict) else False
+# --- Filter helpers ---
+def in_range(s):
+    return (
+        isinstance(s, str)
+        and len(s) >= 5
+        and s[3:5].isdigit()
+        and 11 <= int(s[3:5]) <= 20
     )
-    return proposals_mask & (df["emoji_relevant"] == True)
+
+def filter_utc_doc_reg(df):
+    return df["is_emoji_proposal"] == True
+
+def filter_emoji_proposals(df):
+    return df["doc_num"].apply(in_range)
+
+def filter_cb_rejections(df):
+    return df["document"].apply(in_range)
 
 
 all_identified_emoji_proposals = load_set_from_excel(
-    "utc_register_with_llm_extraction.xlsx", "doc_num", filter_emoji_proposals
+    "utc_register_with_llm_document_classification.xlsx",
+    "doc_num",
+    filter_utc_doc_reg,
 )
-charlotte_buff_rejected = load_set_from_csv("rejected_proposals.csv", "document")
-known_accepted_proposals = load_set_from_csv("emoji_proposal_table.csv", "doc_num")
+charlotte_buff_rejected = load_set_from_csv(
+    "rejected_proposals.csv", "document", filter_cb_rejections
+)
+known_accepted_proposals = load_set_from_csv(
+    "emoji_proposal_table.csv", "doc_num", filter_emoji_proposals
+)
+
+false_rejects = known_accepted_proposals.intersection(charlotte_buff_rejected)
+charlotte_buff_rejected = charlotte_buff_rejected - false_rejects
+
 
 # Analysis
 calculated_rejected = all_identified_emoji_proposals - known_accepted_proposals
