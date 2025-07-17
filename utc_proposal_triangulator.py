@@ -142,7 +142,9 @@ def track_proposal_through_time(proposal_id, utc_df):
     utc_df_copy["normalized_doc_num"] = utc_df_copy["doc_num"].apply(normalize_doc_num)
 
     # 1. Find the original proposal document (direct match on doc_num)
-    direct_matches = utc_df_copy[utc_df_copy["normalized_doc_num"] == normalized_proposal_id].copy()
+    direct_matches = utc_df_copy[
+        utc_df_copy["normalized_doc_num"] == normalized_proposal_id
+    ].copy()
 
     # 2. Find all documents that reference this proposal
     def references_proposal(refs_list):
@@ -155,13 +157,19 @@ def track_proposal_through_time(proposal_id, utc_df):
                 return True
         return False
 
-    reference_matches = utc_df_copy[utc_df_copy["extracted_doc_refs"].apply(references_proposal)].copy()
+    reference_matches = utc_df_copy[
+        utc_df_copy["extracted_doc_refs"].apply(references_proposal)
+    ].copy()
 
     # 3. Combine direct and reference matches
-    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(subset=["doc_num"])
+    all_matches = pd.concat([direct_matches, reference_matches]).drop_duplicates(
+        subset=["doc_num"]
+    )
 
     # 4. Mark each document as either the original proposal or a reference
-    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference")
+    all_matches["reference_type"] = all_matches["normalized_doc_num"].apply(
+        lambda x: "Original Proposal" if x == normalized_proposal_id else "Reference"
+    )
 
     # 5. Sort by date to create a chronological timeline
     if not all_matches.empty and "date" in all_matches.columns:
@@ -171,7 +179,9 @@ def track_proposal_through_time(proposal_id, utc_df):
             print(f"Error sorting dates for {proposal_id}: {e}")
             # Fallback: try to convert dates if needed
             if "date" in all_matches.columns:
-                all_matches["date"] = pd.to_datetime(all_matches["date"], errors="coerce")
+                all_matches["date"] = pd.to_datetime(
+                    all_matches["date"], errors="coerce"
+                )
                 all_matches = all_matches.sort_values("date")
 
     return all_matches.drop(columns=["normalized_doc_num"])
@@ -232,7 +242,11 @@ def analyze_proposal_context(timeline_df):
                     context["key_topics"][word] += 1
 
     # Sort key topics by frequency
-    context["key_topics"] = dict(sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[:30])  # Keep top 30 topics
+    context["key_topics"] = dict(
+        sorted(context["key_topics"].items(), key=lambda item: item[1], reverse=True)[
+            :30
+        ]
+    )  # Keep top 30 topics
 
     return context
 
@@ -525,15 +539,19 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
     node_colors = []
     node_sizes = []
 
-    # Define color scheme for different document types
+    # Define fixed color scheme for main document categories (consistent across visualizations)
     color_map = {
-        "Original Proposal": "#E63946",  # Red for the proposal
-        "Meeting Minutes": "#457B9D",  # Blue for meeting documents
-        "Feedback Document": "#2A9D8F",  # Teal for feedback
-        "Supporting Document": "#F4A261",  # Orange for supporting docs
-        "Approval Document": "#90BE6D",  # Green for approval docs
-        "Reference": "#A8DADC",  # Light blue for general references
+        "Proposals": "#E63946",  # Red
+        "Meeting Documents": "#457B9D",  # Blue
+        "Public Review & Feedback": "#2A9D8F",  # Teal
+        "Liaison & External": "#F4A261",  # Orange
+        "Administrative & Miscellaneous": "#A8DADC",  # Light blue
+        "Standards & Specifications": "#90BE6D",  # Green
+        "Reference": "#CCCCCC",  # Gray
     }
+    # For any new/unexpected category, assign a color from a backup palette
+    backup_colors = ["#FFB300", "#8E44AD", "#34495E", "#00B894", "#6C3483", "#B2BABB"]
+    backup_idx = 0
 
     # Sort timeline by date
     timeline_df = timeline_df.copy()
@@ -547,32 +565,39 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
         subject = row["subject"] if "subject" in row else ""
         ref_type = row["reference_type"] if "reference_type" in row else "Reference"
 
-        # Determine document type for coloring
-        doc_type = "Reference"
+        # Use first key in doc_type for color assignment
+        doc_type_val = row.get("doc_type", None)
+        if isinstance(doc_type_val, dict) and len(doc_type_val) > 0:
+            main_category = list(doc_type_val.keys())[0]
+        elif isinstance(doc_type_val, list) and len(doc_type_val) > 0:
+            main_category = doc_type_val[0]
+        elif isinstance(doc_type_val, str) and doc_type_val:
+            main_category = doc_type_val
+        else:
+            main_category = "Reference"
+
+        # Assign color for main_category, using backup if needed
+        if main_category not in color_map:
+            color_map[main_category] = backup_colors[backup_idx % len(backup_colors)]
+            backup_idx += 1
+
+        # Fallback for original proposal
         if ref_type == "Original Proposal":
-            doc_type = "Original Proposal"
-        elif "minutes" in subject.lower() or "meeting" in subject.lower():
-            doc_type = "Meeting Minutes"
-        elif "feedback" in subject.lower() or "comment" in subject.lower():
-            doc_type = "Feedback Document"
-        elif "support" in subject.lower() or "addition" in subject.lower():
-            doc_type = "Supporting Document"
-        elif "approve" in subject.lower() or "accept" in subject.lower():
-            doc_type = "Approval Document"
+            main_category = "Proposals"
 
         # Create node label with metadata
         date_str = date.strftime("%Y-%m-%d") if date else "No date"
-        label = f"{doc_num}\n{date_str}\n{doc_type}\n{subject[:30]+'...' if len(subject) > 30 else subject}"
+        label = f"{doc_num}\n{date_str}\n{main_category}\n{subject[:30]+'...' if len(subject) > 30 else subject}"
 
         # Add node to graph
         G.add_node(doc_num)
         labels[doc_num] = label
-        node_colors.append(color_map.get(doc_type, color_map["Reference"]))
+        node_colors.append(color_map.get(main_category, "#CCCCCC"))
 
         # Adjust node size based on importance
-        if doc_type == "Original Proposal":
+        if main_category == "Proposals":
             node_sizes.append(2000)  # Larger size for the proposal
-        elif doc_type in ["Approval Document", "Meeting Minutes"]:
+        elif main_category == "Meeting Documents":
             node_sizes.append(1600)  # Medium-large for important docs
         else:
             node_sizes.append(1400)  # Standard size for other docs
@@ -632,7 +657,7 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
         pad=20,
     )
 
-    # Add legend for document types
+    # Add legend for all main categories used
     legend_elements = [
         plt.Line2D(
             [0],
