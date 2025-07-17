@@ -182,7 +182,7 @@ class UTCThroughputAnalyzer:
             orig_mask = timeline["reference_type"] == "Original Proposal"
             orig_dates = timeline.loc[orig_mask, "date"].dropna()
             if len(orig_dates) > 0:
-                metrics["first_date"] = orig_dates.iloc[0]
+                metrics["first_date"] = orig_dates.min()
             else:
                 # Fallback: use earliest date in timeline
                 metrics["first_date"] = timeline["date"].dropna().min()
