@@ -1,10 +1,9 @@
 # -----------------------------------------------------------------------------
 # Script: utc_proposal_triangulator.py
 # Summary: Generates detailed, proposal-centric reports triangulating UTC
-#          document flow and matched email communications, with contextual and
+#          document flow without matched email communications, but with contextual and
 #          statistical analysis for each emoji proposal.
-# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
-#          emoji_proposal_email_matches.csv
+# Inputs:  rejected_proposals.csv (Charlotte Buff's list), utc_register_with_llm_document_classification.xlsx,
 # Outputs: Markdown reports per proposal (proposal_reports/), summary CSV
 # Context: Part of a research pipeline analyzing UTC's emoji proposal and
 #          decision-making processes using public data.
@@ -22,12 +21,75 @@ from collections import defaultdict
 from tqdm import tqdm
 
 
+def safe_literal_eval(val):
+    """Safely parse string representation of dictionary back to dict"""
+    try:
+        if pd.isna(val) or val == "":
+            return {}
+        if isinstance(val, dict):
+            return val
+        return ast.literal_eval(val)
+    except (ValueError, SyntaxError):
+        return {}
+
+
+def load_set_from_excel(filename, column, filter_func=None):
+    """Load a set from Excel file with optional filtering"""
+    df = pd.read_excel(os.path.join(os.getcwd(), filename))
+    if filter_func:
+        df = df[filter_func(df)]
+    return set(df[column].dropna())
+
+
+def load_set_from_csv(filename, column, filter_func=None):
+    """Load a set from CSV file"""
+    df = pd.read_csv(os.path.join(os.getcwd(), filename))
+    if filter_func:
+        df = df[filter_func(df)]
+    return set(df[column].dropna())
+
+
+# --- Filter helpers ---
+def in_range(s):
+    return (
+        isinstance(s, str)
+        and len(s) >= 5
+        and s[3:5].isdigit()
+        and 11 <= int(s[3:5]) <= 20
+    )
+
+
+def filter_utc_doc_reg(df):
+    return df["is_emoji_proposal"] == True
+
+
+def filter_emoji_proposals(df):
+    return df["doc_num"].apply(in_range)
+
+
+def filter_cb_rejections(df):
+    return df["document"].apply(in_range)
+
+
+all_identified_emoji_proposals = load_set_from_excel(
+    "utc_register_with_llm_document_classification.xlsx",
+    "doc_num",
+    filter_utc_doc_reg,
+)
+
+charlotte_buff_rejected = load_set_from_csv(
+    "rejected_proposals.csv", "document", filter_cb_rejections
+)
+known_accepted_proposals = load_set_from_csv(
+    "emoji_proposal_table.csv", "doc_num", filter_emoji_proposals
+)
+
+estimated_rejected_proposals = all_identified_emoji_proposals - known_accepted_proposals
+
 base_path = os.getcwd()
-emoji_proposal_path = os.path.join(base_path, "rejected_proposals.csv")
-
-
-emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
-utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_extraction.xlsx")
+# emoji_proposal_path = os.path.join(base_path, "rejected_proposals.csv")   # CB's incomplete list of rejected proposal
+# emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
+utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_document_classification.xlsx")
 # utc_email_path = os.path.join(base_path, "emoji_proposal_email_matches.csv") ---- we do not have email matches for rejected proposals yet.
 
 
@@ -43,7 +105,7 @@ def safe_literal_eval(val):
 
 # Identify columns that need to be parsed as Python objects
 columns_to_eval = [
-    "doc_type",
+    "document_classification",
     "extracted_doc_refs",
     "emoji_chars",
     "unicode_points",
@@ -65,13 +127,14 @@ except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
 
-rejected_proposals = list(set(emoji_proposal_df["document"]))
+# rejected_proposals = list(set(emoji_proposal_df["document"]))
+rejected_proposals = list(estimated_rejected_proposals)
 authors = {}
 
 for proposal in rejected_proposals:
     # Get all author strings for this proposal
     author_strs = (
-        emoji_proposal_df[emoji_proposal_df["document"] == proposal]["author"]
+        utc_doc_reg_df[utc_doc_reg_df["doc_num"] == proposal]["source"]
         .dropna()
         .tolist()
     )
@@ -93,7 +156,7 @@ new_proposal_df["proposer"] = new_proposal_df["doc_num"].map(
     lambda doc: ", ".join(authors.get(doc, []))
 )
 
-del emoji_proposal_df
+# del emoji_proposal_df
 emoji_proposal_df = new_proposal_df.copy()
 del new_proposal_df
 
@@ -390,8 +453,8 @@ def generate_proposal_timeline_report(
         report.append(f"**Subject:** {row['subject']}")
         if "source" in row and pd.notnull(row["source"]):
             report.append(f"**Source:** {row['source']}")
-        if "doc_type" in row and pd.notnull(row["doc_type"]):
-            doc_type = row["doc_type"]
+        if "document_classification" in row and pd.notnull(row["document_classification"]):
+            doc_type = row["document_classification"]
             if isinstance(doc_type, dict):
                 doc_type_str = ", ".join(
                     [f"{k}: {', '.join(v)}" for k, v in doc_type.items()]
