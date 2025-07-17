@@ -57,6 +57,23 @@ def parse_emoji_proposal_map(html_path, output_csv):
             # 1st col: emoji code (may be a link)
             code_cell = cols[0]
             emoji_code = code_cell.get_text(strip=True)
+            # 2nd col: emoji image (extract unicode codepoints from title)
+            image_cell = cols[1]
+            img_tag = image_cell.find("img")
+            codepoints_list = []
+            if img_tag and img_tag.has_attr("title"):
+                title_text = img_tag["title"]
+                # Extract all codepoints (single or multiple) from title
+                codepoints = re.findall(r"U\+[0-9A-Fa-f]{4,}", title_text)
+                # Normalize: uppercase, ensure U+ prefix
+                codepoints_list = [
+                    cp.upper() if cp.startswith("U+") else "U+" + cp.upper()
+                    for cp in codepoints
+                ]
+            # Space-separated string for lookup
+            unicode_codepoints = " ".join(codepoints_list)
+            # Canonical sorted form (for matching/searching)
+            canonical_codepoints = " ".join(sorted(codepoints_list))
             # 3rd col: emoji name
             emoji_name = cols[2].get_text(strip=True)
             # 4th col: proposal doc num (may be comma-separated)
@@ -72,6 +89,9 @@ def parse_emoji_proposal_map(html_path, output_csv):
             data.append(
                 {
                     "emoji_code": emoji_code,
+                    "unicode_codepoints": unicode_codepoints,
+                    "unicode_codepoints_list": codepoints_list,
+                    "canonical_codepoints": canonical_codepoints,
                     "emoji_name": emoji_name,
                     "proposal_doc_num": proposal_doc_num_pylist,
                     "emoji_category": current_category,
@@ -84,5 +104,5 @@ def parse_emoji_proposal_map(html_path, output_csv):
 
 if __name__ == "__main__":
     html_path = os.path.join(os.path.dirname(__file__), "emoji_to_proposal_map.html")
-    output_csv = os.path.join(os.path.dirname(__file__), "emoji_to_proposal_map.csv")
+    output_csv = os.path.join(os.path.dirname(__file__), "emoji_to_proposal_map_v2.csv")
     parse_emoji_proposal_map(html_path, output_csv)
