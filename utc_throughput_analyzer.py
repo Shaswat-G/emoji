@@ -177,39 +177,59 @@ class UTCThroughputAnalyzer:
 
         # Date-based metrics
         if not timeline.empty and "date" in timeline.columns:
+            # --- NEW LOGIC ---
+            # 1. Find the date of the original proposal document
+            orig_mask = timeline["reference_type"] == "Original Proposal"
+            orig_dates = timeline.loc[orig_mask, "date"].dropna()
+            if len(orig_dates) > 0:
+                metrics["first_date"] = orig_dates.iloc[0]
+            else:
+                # Fallback: use earliest date in timeline
+                metrics["first_date"] = timeline["date"].dropna().min()
+
+            # 2. Find the last reference in a Meeting Document
+            meeting_mask = timeline["doc_type"].apply(
+                lambda dt: (isinstance(dt, dict) and "Meeting Documents" in dt.keys())
+                or (isinstance(dt, list) and "Meeting Documents" in dt)
+                or (isinstance(dt, str) and dt == "Meeting Documents")
+            )
+            meeting_dates = timeline.loc[meeting_mask, "date"].dropna()
+            if len(meeting_dates) > 0:
+                metrics["last_date"] = meeting_dates.max()
+            else:
+                # Fallback: use latest date in timeline
+                metrics["last_date"] = timeline["date"].dropna().max()
+
+            metrics["processing_days"] = (
+                metrics["last_date"] - metrics["first_date"]
+            ).days
+            metrics["processing_years"] = metrics["processing_days"] / 365.25
+
+            # Velocity metrics
+            if metrics["processing_days"] > 0:
+                metrics["velocity_per_year"] = metrics["reference_count"] / max(
+                    metrics["processing_years"], 1 / 365.25
+                )
+                metrics["velocity_per_month"] = metrics["reference_count"] / max(
+                    metrics["processing_days"] / 30.44, 1 / 30.44
+                )
+            else:
+                metrics["velocity_per_year"] = 0
+                metrics["velocity_per_month"] = 0
+
+            # Dormancy analysis
             timeline_dates = timeline["date"].dropna()
-            if len(timeline_dates) > 0:
-                metrics["first_date"] = timeline_dates.min()
-                metrics["last_date"] = timeline_dates.max()
-                metrics["processing_days"] = (
-                    metrics["last_date"] - metrics["first_date"]
-                ).days
-                metrics["processing_years"] = metrics["processing_days"] / 365.25
-
-                # Velocity metrics
-                if metrics["processing_days"] > 0:
-                    metrics["velocity_per_year"] = metrics["reference_count"] / max(
-                        metrics["processing_years"], 1 / 365.25
-                    )
-                    metrics["velocity_per_month"] = metrics["reference_count"] / max(
-                        metrics["processing_days"] / 30.44, 1 / 30.44
-                    )
-                else:
-                    metrics["velocity_per_year"] = 0
-                    metrics["velocity_per_month"] = 0
-
-                # Dormancy analysis
-                if len(timeline_dates) > 1:
-                    sorted_dates = timeline_dates.sort_values()
-                    gaps = [
-                        (sorted_dates.iloc[i + 1] - sorted_dates.iloc[i]).days
-                        for i in range(len(sorted_dates) - 1)
-                    ]
-                    metrics["max_dormancy_days"] = max(gaps) if gaps else 0
-                    metrics["avg_gap_days"] = np.mean(gaps) if gaps else 0
-                else:
-                    metrics["max_dormancy_days"] = 0
-                    metrics["avg_gap_days"] = 0
+            if len(timeline_dates) > 1:
+                sorted_dates = timeline_dates.sort_values()
+                gaps = [
+                    (sorted_dates.iloc[i + 1] - sorted_dates.iloc[i]).days
+                    for i in range(len(sorted_dates) - 1)
+                ]
+                metrics["max_dormancy_days"] = max(gaps) if gaps else 0
+                metrics["avg_gap_days"] = np.mean(gaps) if gaps else 0
+            else:
+                metrics["max_dormancy_days"] = 0
+                metrics["avg_gap_days"] = 0
 
         # People and entity metrics
         context = analyze_proposal_context(timeline)
