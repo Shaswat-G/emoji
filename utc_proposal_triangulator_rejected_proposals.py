@@ -1,11 +1,10 @@
 # -----------------------------------------------------------------------------
 # Script: utc_proposal_triangulator.py
 # Summary: Generates detailed, proposal-centric reports triangulating UTC
-#          document flow and matched email communications, with contextual and
+#          document flow without matched email communications, but with contextual and
 #          statistical analysis for each emoji proposal.
-# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
-#          emoji_proposal_email_matches.csv
-# Outputs: Markdown reports per proposal (proposal_reports/), summary CSV
+# Inputs:  rejected_proposals.csv (Charlotte Buff's list), utc_register_with_llm_document_classification.xlsx,
+# Outputs: Markdown reports per proposal (rejected_proposal_reports/), summary CSV
 # Context: Part of a research pipeline analyzing UTC's emoji proposal and
 #          decision-making processes using public data.
 # -----------------------------------------------------------------------------
@@ -22,12 +21,77 @@ from collections import defaultdict
 from tqdm import tqdm
 
 
+def safe_literal_eval(val):
+    """Safely parse string representation of dictionary back to dict"""
+    try:
+        if pd.isna(val) or val == "":
+            return {}
+        if isinstance(val, dict):
+            return val
+        return ast.literal_eval(val)
+    except (ValueError, SyntaxError):
+        return {}
+
+
+def load_set_from_excel(filename, column, filter_func=None):
+    """Load a set from Excel file with optional filtering"""
+    df = pd.read_excel(os.path.join(os.getcwd(), filename))
+    if filter_func:
+        df = df[filter_func(df)]
+    return set(df[column].dropna())
+
+
+def load_set_from_csv(filename, column, filter_func=None):
+    """Load a set from CSV file"""
+    df = pd.read_csv(os.path.join(os.getcwd(), filename))
+    if filter_func:
+        df = df[filter_func(df)]
+    return set(df[column].dropna())
+
+
+# --- Filter helpers ---
+def in_range(s):
+    return (
+        isinstance(s, str)
+        and len(s) >= 5
+        and s[3:5].isdigit()
+        and 11 <= int(s[3:5]) <= 20
+    )
+
+
+def filter_utc_doc_reg(df):
+    return df["is_emoji_proposal"] == True
+
+
+def filter_emoji_proposals(df):
+    return df["doc_num"].apply(in_range)
+
+
+def filter_cb_rejections(df):
+    return df["document"].apply(in_range)
+
+
+all_identified_emoji_proposals = load_set_from_excel(
+    "utc_register_with_llm_document_classification.xlsx",
+    "doc_num",
+    filter_utc_doc_reg,
+)
+
+charlotte_buff_rejected = load_set_from_csv(
+    "rejected_proposals.csv", "document", filter_cb_rejections
+)
+known_accepted_proposals = load_set_from_csv(
+    "emoji_proposal_table.csv", "doc_num", filter_emoji_proposals
+)
+
+estimated_rejected_proposals = all_identified_emoji_proposals - known_accepted_proposals
+
 base_path = os.getcwd()
-emoji_proposal_path = os.path.join(base_path, "rejected_proposals.csv")
-
-
-emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
-utc_doc_reg_path = os.path.join(base_path, "utc_register_with_llm_extraction.xlsx")
+# emoji_proposal_path = os.path.join(base_path, "rejected_proposals.csv")   # CB's incomplete list of rejected proposal
+# emoji_proposal_df = pd.read_csv(emoji_proposal_path, dtype=str)
+utc_doc_reg_path = os.path.join(
+    base_path, "utc_register_with_llm_document_classification.xlsx"
+)
 # utc_email_path = os.path.join(base_path, "emoji_proposal_email_matches.csv") ---- we do not have email matches for rejected proposals yet.
 
 
@@ -43,7 +107,7 @@ def safe_literal_eval(val):
 
 # Identify columns that need to be parsed as Python objects
 columns_to_eval = [
-    "doc_type",
+    "document_classification",
     "extracted_doc_refs",
     "emoji_chars",
     "unicode_points",
@@ -65,13 +129,14 @@ except Exception as e:
     print(f"Error loading or processing the Excel file: {e}")
 
 
-rejected_proposals = list(set(emoji_proposal_df["document"]))
+# rejected_proposals = list(set(emoji_proposal_df["document"]))
+rejected_proposals = list(estimated_rejected_proposals)
 authors = {}
 
 for proposal in rejected_proposals:
     # Get all author strings for this proposal
     author_strs = (
-        emoji_proposal_df[emoji_proposal_df["document"] == proposal]["author"]
+        utc_doc_reg_df[utc_doc_reg_df["doc_num"] == proposal]["source"]
         .dropna()
         .tolist()
     )
@@ -93,7 +158,7 @@ new_proposal_df["proposer"] = new_proposal_df["doc_num"].map(
     lambda doc: ", ".join(authors.get(doc, []))
 )
 
-del emoji_proposal_df
+# del emoji_proposal_df
 emoji_proposal_df = new_proposal_df.copy()
 del new_proposal_df
 
@@ -246,7 +311,7 @@ def analyze_proposal_context(timeline_df):
 def analyze_all_emoji_proposals():
     """Analyze all emoji proposals in the dataset"""
     # Create output directory for reports
-    reports_dir = os.path.join(base_path, "proposal_reports")
+    reports_dir = os.path.join(base_path, "rejected_proposal_reports")
     os.makedirs(reports_dir, exist_ok=True)
 
     # Track all proposals and generate reports
@@ -390,8 +455,10 @@ def generate_proposal_timeline_report(
         report.append(f"**Subject:** {row['subject']}")
         if "source" in row and pd.notnull(row["source"]):
             report.append(f"**Source:** {row['source']}")
-        if "doc_type" in row and pd.notnull(row["doc_type"]):
-            doc_type = row["doc_type"]
+        if "document_classification" in row and pd.notnull(
+            row["document_classification"]
+        ):
+            doc_type = row["document_classification"]
             if isinstance(doc_type, dict):
                 doc_type_str = ", ".join(
                     [f"{k}: {', '.join(v)}" for k, v in doc_type.items()]
@@ -430,7 +497,7 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
     Args:
         proposal_id: The document number of the proposal
         timeline_df: DataFrame containing the proposal's timeline
-        output_dir: Directory to save the visualization (default: proposal_reports/timelines)
+        output_dir: Directory to save the visualization (default: rejected_proposal_reports/timelines)
 
     Returns:
         Path to the generated visualization file
@@ -441,7 +508,7 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
     import pandas as pd
 
     if output_dir is None:
-        output_dir = os.path.join(base_path, "proposal_reports", "timelines")
+        output_dir = os.path.join(base_path, "rejected_proposal_reports", "timelines")
     os.makedirs(output_dir, exist_ok=True)
 
     G = nx.DiGraph()
@@ -449,15 +516,19 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
     node_colors = []
     node_sizes = []
 
-    # Define color scheme for different document types
+    # Define fixed color scheme for main document categories (consistent across visualizations)
     color_map = {
-        "Original Proposal": "#E63946",  # Red for the proposal
-        "Meeting Minutes": "#457B9D",  # Blue for meeting documents
-        "Feedback Document": "#2A9D8F",  # Teal for feedback
-        "Supporting Document": "#F4A261",  # Orange for supporting docs
-        "Approval Document": "#90BE6D",  # Green for approval docs
-        "Reference": "#A8DADC",  # Light blue for general references
+        "Proposals": "#E63946",  # Red
+        "Meeting Documents": "#457B9D",  # Blue
+        "Public Review & Feedback": "#2A9D8F",  # Teal
+        "Liaison & External": "#F4A261",  # Orange
+        "Administrative & Miscellaneous": "#A8DADC",  # Light blue
+        "Standards & Specifications": "#90BE6D",  # Green
+        "Reference": "#CCCCCC",  # Gray
     }
+    # For any new/unexpected category, assign a color from a backup palette
+    backup_colors = ["#FFB300", "#8E44AD", "#34495E", "#00B894", "#6C3483", "#B2BABB"]
+    backup_idx = 0
 
     # Sort timeline by date
     timeline_df = timeline_df.copy()
@@ -471,35 +542,44 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
         subject = row["subject"] if "subject" in row else ""
         ref_type = row["reference_type"] if "reference_type" in row else "Reference"
 
-        # Determine document type for coloring
-        doc_type = "Reference"
-        if ref_type == "Original Proposal":
-            doc_type = "Original Proposal"
-        elif "minutes" in subject.lower() or "meeting" in subject.lower():
-            doc_type = "Meeting Minutes"
-        elif "feedback" in subject.lower() or "comment" in subject.lower():
-            doc_type = "Feedback Document"
-        elif "support" in subject.lower() or "addition" in subject.lower():
-            doc_type = "Supporting Document"
-        elif "approve" in subject.lower() or "accept" in subject.lower():
-            doc_type = "Approval Document"
+        # Use first key in document_classification dict for color assignment
+        doc_class = row.get("document_classification", None)
+        if isinstance(doc_class, dict) and len(doc_class) > 0:
+            main_category = list(doc_class.keys())[0]
+        elif isinstance(doc_class, list) and len(doc_class) > 0:
+            main_category = doc_class[0]
+        elif isinstance(doc_class, str) and doc_class:
+            main_category = doc_class
+        else:
+            doc_type_val = row.get("doc_type", None)
+            if isinstance(doc_type_val, list) and len(doc_type_val) > 0:
+                main_category = doc_type_val[0]
+            elif isinstance(doc_type_val, str) and doc_type_val:
+                main_category = doc_type_val
+            else:
+                main_category = "Reference"
+
+        # Assign color for main_category, using backup if needed
+        if main_category not in color_map:
+            color_map[main_category] = backup_colors[backup_idx % len(backup_colors)]
+            backup_idx += 1
 
         # Create node label with metadata
         date_str = date.strftime("%Y-%m-%d") if date else "No date"
-        label = f"{doc_num}\n{date_str}\n{doc_type}\n{subject[:30]+'...' if len(subject) > 30 else subject}"
+        label = f"{doc_num}\n{date_str}\n{main_category}\n{subject[:30]+'...' if len(subject) > 30 else subject}"
 
         # Add node to graph
         G.add_node(doc_num)
         labels[doc_num] = label
-        node_colors.append(color_map.get(doc_type, color_map["Reference"]))
+        node_colors.append(color_map.get(main_category, "#CCCCCC"))
 
         # Adjust node size based on importance
-        if doc_type == "Original Proposal":
+        if ref_type == "Original Proposal":
             node_sizes.append(2000)  # Larger size for the proposal
-        elif doc_type in ["Approval Document", "Meeting Minutes"]:
-            node_sizes.append(1600)  # Medium-large for important docs
+        elif main_category:
+            node_sizes.append(1600)
         else:
-            node_sizes.append(1400)  # Standard size for other docs
+            node_sizes.append(1400)
 
     # Add edges in timeline order
     doc_nums = list(timeline_df["doc_num"])
@@ -556,7 +636,7 @@ def visualize_proposal_timeline(proposal_id, timeline_df, output_dir=None):
         pad=20,
     )
 
-    # Add legend for document types
+    # Add legend for all main categories used
     legend_elements = [
         plt.Line2D(
             [0],
@@ -626,7 +706,8 @@ def generate_index_report(all_timelines, proposal_stats, timeline_paths=None):
         for p_id in top_proposals:
             if p_id in timeline_paths and timeline_paths[p_id]:
                 rel_path = os.path.relpath(
-                    timeline_paths[p_id], os.path.join(base_path, "proposal_reports")
+                    timeline_paths[p_id],
+                    os.path.join(base_path, "rejected_proposal_reports"),
                 )
                 safe_filename = re.sub(r'[\\/*?:"<>|]', "_", p_id)
                 example_timelines.append(
@@ -680,7 +761,7 @@ def generate_all_reports():
     print("Starting emoji proposal analysis and report generation...")
 
     # Create output directory for reports
-    reports_dir = os.path.join(base_path, "proposal_reports")
+    reports_dir = os.path.join(base_path, "rejected_proposal_reports")
     os.makedirs(reports_dir, exist_ok=True)
 
     # Analyze all emoji proposals
