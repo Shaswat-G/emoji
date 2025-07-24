@@ -1,3 +1,23 @@
+###############################################################################
+# Script: emoji_chart_scraper.py
+# Summary: Extracts emoji usage statistics and metadata from an HTML table.
+#          Normalizes unicode codepoints, provides both string and list
+#          representations, and outputs a structured Excel file for downstream
+#          analysis and database construction of Unicode emoji usage.
+# Inputs:  emoji_charts.html (HTML table)
+# Outputs: emoji_chart_extracted.xlsx (Excel file with columns:
+#          Date, Source, Count, unicode_codepoints, unicode_codepoints_list,
+#          canonical_codepoints, Name)
+# Context: Part of a research pipeline analyzing emoji usage, proposals, and
+#          decision-making processes using public data. Designed for robust
+#          emoji keying and normalization for database and analysis use.
+#
+# Best practices followed:
+#   * All codepoints are normalized to uppercase and use the "U+" prefix
+#   * Both string and list representations are provided for flexibility
+#   * Canonical (sorted) form is included for robust matching/searching
+#   * Output Excel file is suitable for database keying and downstream Unicode analysis
+###############################################################################
 import pandas as pd
 from bs4 import BeautifulSoup
 
