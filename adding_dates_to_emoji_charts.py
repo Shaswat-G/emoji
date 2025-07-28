@@ -1,9 +1,23 @@
+# -----------------------------------------------------------------------------
+# Script: adding_dates_to_emoji_charts.py
+# Summary: Enriches emoji chart data by merging with Unicode technical release
+#          date mappings to add precise version and date information for
+#          temporal analysis of emoji standardization patterns.
+# Inputs:  emoji_chart_extracted.xlsx, year_to_technical_release_date_map.xlsx
+# Outputs: emoji_chart_with_dates.xlsx
+# Context: Data preparation step in emoji proposal research pipeline, enabling
+#          chronological analysis of Unicode emoji adoption and release timing
+#          for academic study of standardization processes.
+# -----------------------------------------------------------------------------
+
 import os
 import pandas as pd
 
 
 em_chart = os.path.join(os.path.dirname(__file__), "emoji_chart_extracted.xlsx")
-date_map = os.path.join(os.path.dirname(__file__), "year_to_technical_release_date_map.xlsx")
+date_map = os.path.join(
+    os.path.dirname(__file__), "year_to_technical_release_date_map.xlsx"
+)
 
 em_df = pd.read_excel(em_chart)
 date_map_df = pd.read_excel(date_map)
