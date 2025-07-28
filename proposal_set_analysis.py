@@ -41,7 +41,8 @@ def in_range(s):
     )
 
 def filter_utc_doc_reg(df):
-    return df["is_emoji_proposal"] == True
+
+    return ((df["is_emoji_proposal"] == True) | (df["is_emoji_mechanism"] == True) | (df["is_ideological_argument"] == True))
 
 def filter_emoji_proposals(df):
     return df["doc_num"].apply(in_range)
@@ -50,17 +51,21 @@ def filter_cb_rejections(df):
     return df["document"].apply(in_range)
 
 
+# all_identified_emoji_proposals = load_set_from_excel(
+#     "utc_register_with_llm_document_classification.xlsx",
+#     "doc_num",
+#     filter_utc_doc_reg,
+# )
+
 all_identified_emoji_proposals = load_set_from_excel(
-    "utc_register_with_llm_document_classification.xlsx",
+    "utc_register_with_llm_document_classification_with_missed.xlsx",
     "doc_num",
     filter_utc_doc_reg,
 )
-charlotte_buff_rejected = load_set_from_csv(
-    "rejected_proposals.csv", "document", filter_cb_rejections
-)
-known_accepted_proposals = load_set_from_csv(
-    "emoji_proposal_table.csv", "doc_num", filter_emoji_proposals
-)
+
+
+charlotte_buff_rejected = load_set_from_csv("rejected_proposals.csv", "document", filter_cb_rejections)
+known_accepted_proposals = load_set_from_csv("emoji_proposal_table.csv", "doc_num", filter_emoji_proposals)
 
 false_rejects = known_accepted_proposals.intersection(charlotte_buff_rejected)
 charlotte_buff_rejected = charlotte_buff_rejected - false_rejects
@@ -101,9 +106,7 @@ print(f"Known accepted proposals missed by our system: {len(accepted_missing)}")
 print(f"Our system recall on accepted proposals: {our_recall:.1f}%")
 
 if len(all_identified_emoji_proposals) > 0:
-    acceptance_rate_identified = (
-        len(accepted_found) / len(all_identified_emoji_proposals) * 100
-    )
+    acceptance_rate_identified = (len(accepted_found) / len(all_identified_emoji_proposals) * 100)
     print(f"Acceptance rate in our identified set: {acceptance_rate_identified:.1f}%")
 
 if len(known_accepted_proposals) > 0:
@@ -125,9 +128,7 @@ if accepted_missing:
         print(f"  {doc}")
 
 # Analysis of identification quality
-extra_identified = (
-    all_identified_emoji_proposals - known_accepted_proposals - charlotte_buff_rejected
-)
+extra_identified = (all_identified_emoji_proposals - known_accepted_proposals - charlotte_buff_rejected)
 print(f"\nIDENTIFICATION QUALITY:")
 print(f"Novel proposals identified (not in any known list): {len(extra_identified)}")
 if extra_identified:
@@ -138,9 +139,7 @@ if extra_identified:
 # Completeness estimation
 if our_recall > 0:
     estimated_total_accepted = len(known_accepted_proposals) / (our_recall / 100)
-    estimated_missing_accepted = estimated_total_accepted - len(
-        known_accepted_proposals
-    )
+    estimated_missing_accepted = estimated_total_accepted - len(known_accepted_proposals)
     print(f"\nCOMPLETENESS ESTIMATION:")
     print(f"Estimated total accepted proposals: {estimated_total_accepted:.0f}")
     print(f"Estimated missing from accepted list: {estimated_missing_accepted:.0f}")
@@ -161,3 +160,13 @@ if false_rejects:
     print(f"\nWARNING - Accepted proposals in rejected list:")
     for doc in list(false_rejects)[:5]:
         print(f"  {doc}")
+        
+        
+
+with open("accepted_missing.txt", "w", encoding="utf-8") as f:
+    for doc in sorted(accepted_missing):
+        f.write(f"{doc}\n")
+
+with open("rejected_missing.txt", "w", encoding="utf-8") as f:
+    for doc in sorted(extra_in_cb):
+        f.write(f"{doc}\n")
