@@ -16,6 +16,15 @@ import os
 from collections import Counter
 
 
+META_COLS = [
+    "subject",
+    "source",
+    "date",
+    "summary",
+    "description"
+]
+
+
 def split_and_flatten_proposals(series):
     """Extract and flatten proposal document numbers from comma-separated strings."""
     proposals = []
@@ -53,6 +62,25 @@ def merge_with_metadata(counts_df, metadata_df):
     )
 
 
+def extract_year_from_docnum(doc_num):
+    """
+    Extracts the year as integer from doc_num like 'L2/23-036' -> 2023.
+    Returns None if not found.
+    """
+    if not isinstance(doc_num, str) or len(doc_num) < 6:
+        return None
+    try:
+        year_suffix = doc_num[3:5]
+        year_int = int(year_suffix)
+        # Assume 2000+ for years < 50, else 1900+
+        if year_int < 50:
+            return 2000 + year_int
+        else:
+            return 1900 + year_int
+    except Exception:
+        return None
+
+
 def main():
     base_dir = os.path.dirname(__file__)
 
@@ -66,20 +94,34 @@ def main():
             "utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx",
         )
     )
+    utc_doc_reg = utc_doc_reg[["doc_num"] + META_COLS].drop_duplicates(subset="doc_num").reset_index(drop=True)
+
+    # Helper to filter docnums by year range
+    def in_year_range(docnum):
+        year = extract_year_from_docnum(docnum)
+        return year is not None and 2010 <= year <= 2020
 
     # Extract single concept proposals
     single_filter = (merged["accepted_proposal_type"] == "single_concept_proposal") & (
         merged["proposal_doc_num"] != "-"
     )
     single_proposals = set(
-        split_and_flatten_proposals(merged[single_filter]["proposal_doc_num"])
+        filter(
+            in_year_range,
+            split_and_flatten_proposals(merged[single_filter]["proposal_doc_num"]),
+        )
     )
 
     # Process combination proposals
-    comb_proposals = split_and_flatten_proposals(
-        merged[merged["accepted_proposal_type"] == "combination_proposal"][
-            "proposal_doc_num"
-        ]
+    comb_proposals = list(
+        filter(
+            in_year_range,
+            split_and_flatten_proposals(
+                merged[merged["accepted_proposal_type"] == "combination_proposal"][
+                    "proposal_doc_num"
+                ]
+            ),
+        )
     )
 
     # Generate counts and merge with metadata
@@ -91,9 +133,7 @@ def main():
 
     # Export results
     single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)
-    comb_with_metadata.to_excel(
-        "combination_concept_accepted_proposals.xlsx", index=False
-    )
+    comb_with_metadata.to_excel("combination_concept_accepted_proposals.xlsx", index=False)
 
 
 if __name__ == "__main__":

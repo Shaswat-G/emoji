@@ -41,9 +41,7 @@ def main():
     emoji_map = pd.read_csv(os.path.join(base_path, "emoji_to_proposal_map_v2.csv"))
 
     # Clean proposal numbers
-    emoji_map["proposal_doc_num"] = emoji_map["proposal_doc_num"].apply(
-        clean_proposal_doc_num
-    )
+    emoji_map["proposal_doc_num"] = emoji_map["proposal_doc_num"].apply(clean_proposal_doc_num)
 
     # Remove unnecessary columns
     emoji_chart.drop(
