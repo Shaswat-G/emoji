@@ -1,13 +1,15 @@
 # -----------------------------------------------------------------------------
 # Script: analyze_accepted_proposal_dataset.py
 # Summary: Analyzes accepted emoji proposals, categorizing them into single-concept
-#          and combination proposals, and generates summary statistics with
-#          document metadata for research analysis.
+#          and combination proposals, generates summary statistics with document metadata,
+#          and computes the acceptance date for each proposal by finding the earliest date
+#          in the dataset after the proposal's original date where the proposal doc number appears.
 # Inputs:  emoji_accepted_proposal_dataset.xlsx,
 #          utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx
-# Outputs: single_concept_accepted_proposals.xlsx, combination_concept_accepted_proposals.xlsx
+# Outputs: single_concept_accepted_proposals.xlsx (with acceptance_date column),
+#          combination_concept_accepted_proposals.xlsx
 # Context: Part of emoji proposal research pipeline analyzing UTC's decision-making
-#          patterns and proposal categorization for academic study of Unicode
+#          patterns, proposal categorization, and acceptance timeline for academic study of Unicode
 #          emoji standardization processes.
 # -----------------------------------------------------------------------------
 
@@ -157,7 +159,9 @@ def main():
 
     # Export results
     single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)
-    comb_with_metadata.to_excel("combination_concept_accepted_proposals.xlsx", index=False)
+    comb_with_metadata.to_excel(
+        "combination_concept_accepted_proposals.xlsx", index=False
+    )
 
 
 if __name__ == "__main__":
