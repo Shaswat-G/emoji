@@ -209,3 +209,8 @@ archives/
 *.html
 /proposal_reports
 /rejected_proposal_reports
+*.vsidx
+
+.vs/emoji/v17/.wsuo
+
+*.sqlite
