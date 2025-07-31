@@ -39,7 +39,7 @@ def extract_year_from_docnum(doc_num):
 
 
 def main():
-    base_path = os.path.dirname(__file__)
+    base_path = os.path.dirname(os.path.abspath(__file__))
 
     utc_doc_reg = pd.read_excel(
         os.path.join(
