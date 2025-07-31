@@ -78,7 +78,7 @@ def extract_year_from_docnum(doc_num):
 
 
 def main():
-    base_dir = os.path.dirname(__file__)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Load datasets
     merged = pd.read_excel(
