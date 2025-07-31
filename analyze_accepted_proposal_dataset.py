@@ -16,13 +16,7 @@ import os
 from collections import Counter
 
 
-META_COLS = [
-    "subject",
-    "source",
-    "date",
-    "summary",
-    "description"
-]
+META_COLS = ["subject", "source", "date", "summary", "description"]
 
 
 def split_and_flatten_proposals(series):
@@ -94,7 +88,11 @@ def main():
             "utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx",
         )
     )
-    utc_doc_reg = utc_doc_reg[["doc_num"] + META_COLS].drop_duplicates(subset="doc_num").reset_index(drop=True)
+    utc_doc_reg = (
+        utc_doc_reg[["doc_num"] + META_COLS]
+        .drop_duplicates(subset="doc_num")
+        .reset_index(drop=True)
+    )
 
     # Helper to filter docnums by year range
     def in_year_range(docnum):
@@ -130,6 +128,32 @@ def main():
 
     single_with_metadata = merge_with_metadata(single_counts, utc_doc_reg)
     comb_with_metadata = merge_with_metadata(comb_counts, utc_doc_reg)
+
+    # Compute acceptance_date for each proposal in single_with_metadata
+    merged_dates = merged.copy()
+    merged_dates["proposal_doc_num_list"] = merged_dates["proposal_doc_num"].apply(
+        lambda x: [p.strip() for p in str(x).split(",") if p.strip()]
+    )
+    merged_dates["Date"] = pd.to_datetime(merged_dates["Date"], errors="coerce")
+    single_with_metadata["date"] = pd.to_datetime(
+        single_with_metadata["date"], errors="coerce"
+    )
+    acceptance_dates = []
+    for idx, row in single_with_metadata.iterrows():
+        docnum = row["proposal_doc_num"]
+        base_date = row["date"]
+        # Find all rows in merged where docnum is in proposal_doc_num_list
+        mask = merged_dates["proposal_doc_num_list"].apply(lambda lst: docnum in lst)
+        filtered = merged_dates[mask]
+        # Filter for Date > base_date
+        filtered = filtered[filtered["Date"] > base_date]
+        # Get minimum Date
+        if not filtered.empty:
+            acceptance_date = filtered["Date"].min()
+        else:
+            acceptance_date = pd.NaT
+        acceptance_dates.append(acceptance_date)
+    single_with_metadata["acceptance_date"] = acceptance_dates
 
     # Export results
     single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)

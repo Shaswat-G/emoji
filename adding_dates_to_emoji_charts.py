@@ -15,9 +15,7 @@ import pandas as pd
 
 
 em_chart = os.path.join(os.path.dirname(__file__), "emoji_chart_extracted.xlsx")
-date_map = os.path.join(
-    os.path.dirname(__file__), "year_to_technical_release_date_map.xlsx"
-)
+date_map = os.path.join(os.path.dirname(__file__), "year_to_technical_release_date_map.xlsx")
 
 em_df = pd.read_excel(em_chart)
 date_map_df = pd.read_excel(date_map)
