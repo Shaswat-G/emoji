@@ -157,6 +157,26 @@ def main():
         acceptance_dates.append(acceptance_date)
     single_with_metadata["acceptance_date"] = acceptance_dates
 
+    # Add processing_time and nature columns
+    EXCEPTION_LIMIT_DAYS = 1000  # Customize as needed
+    single_with_metadata["processing_time"] = None
+    single_with_metadata["nature"] = None
+    for idx, row in single_with_metadata.iterrows():
+        proposal_date = row["date"]
+        acceptance_date = row["acceptance_date"]
+        if pd.notnull(proposal_date) and pd.notnull(acceptance_date):
+            days = (
+                pd.to_datetime(acceptance_date) - pd.to_datetime(proposal_date)
+            ).days
+            single_with_metadata.at[idx, "processing_time"] = days
+            if days <= 0 or days > EXCEPTION_LIMIT_DAYS:
+                single_with_metadata.at[idx, "nature"] = "exception"
+            else:
+                single_with_metadata.at[idx, "nature"] = "normal"
+        else:
+            single_with_metadata.at[idx, "processing_time"] = None
+            single_with_metadata.at[idx, "nature"] = "exception"
+
     # Export results
     single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)
     comb_with_metadata.to_excel(
