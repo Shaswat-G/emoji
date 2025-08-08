@@ -13,7 +13,7 @@
 import pandas as pd
 import os
 
-EXCEPTION_LIMIT_DAYS = 500  # Customize the exception threshold for processing time
+EXCEPTION_LIMIT_DAYS = 1000  # Customize the exception threshold for processing time
 from utc_proposal_triangulator import safe_literal_eval
 
 
