@@ -623,7 +623,7 @@ class UTCThroughputAnalyzer:
         print(f"Visualizations saved to {output_dir}")
 
     def generate_report(
-        self, metrics_df, comparison_results, people_body_results, output_dir
+        self, metrics_df, comparison_results, output_dir
     ):
         """
         Generate comprehensive Markdown report
