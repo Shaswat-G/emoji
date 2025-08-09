@@ -1,11 +1,9 @@
 # -----------------------------------------------------------------------------
-# Script: utc_throughput_analyzer.py
-# Summary: Analyzes UTC proposal processing efficiency before vs after 2017
-#          to evaluate the impact of process standardization changes.
-# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
-#          emoji_proposal_email_matches.csv, people_and_body_proposals.xlsx
-# Outputs: Comparative analysis reports, visualizations, statistical tests
-# Context: Evaluates whether UTC's 2017 process changes improved efficiency
+# Script: utc_throughput_analyzer_new.py
+# Purpose: Analyze emoji proposal processing metrics for the Unicode Technical Consortium (UTC), comparing pre- and post-2017 eras and accepted vs rejected proposals.
+# Features: Loads datasets, computes metrics, performs statistical comparisons, generates reports and visualizations.
+# Inputs: single_concept_accepted_proposals.xlsx, rejected_proposal_dataset.xlsx, utc_register_with_llm_extraction.xlsx, emoji_proposal_email_matches.csv
+# Outputs: Markdown reports, PNG visualizations, processed metrics CSV
 # -----------------------------------------------------------------------------
 
 import os

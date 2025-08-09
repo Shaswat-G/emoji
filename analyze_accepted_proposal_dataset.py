@@ -197,10 +197,8 @@ def main():
             single_with_metadata.at[idx, "nature"] = "exception"
 
     # Export results
-    single_with_metadata.to_excel(
-        "single_concept_accepted_proposals_v2.xlsx", index=False
-    )
-    # comb_with_metadata.to_excel("combination_concept_accepted_proposals.xlsx", index=False)
+    single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)
+    comb_with_metadata.to_excel("combination_concept_accepted_proposals.xlsx", index=False)
 
 
 if __name__ == "__main__":
