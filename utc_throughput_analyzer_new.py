@@ -642,7 +642,6 @@ class UTCThroughputAnalyzer:
             )
             f.write("improved the efficiency of emoji proposal processing.\n\n")
 
-            # "velocity_per_year",  # Removed since it's not present in metrics_df
             f.write("## Overview Statistics\n\n")
             f.write(
                 f"- **Total Proposals Analyzed**: {comparison_results['overview']['total_proposals']}\n"
