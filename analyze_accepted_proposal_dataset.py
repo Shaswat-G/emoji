@@ -157,6 +157,25 @@ def main():
         acceptance_dates.append(acceptance_date)
     single_with_metadata["acceptance_date"] = acceptance_dates
 
+    # Tag each single concept proposal with its unique emoji_categories
+    def get_emoji_categories(docnum):
+        mask = merged["proposal_doc_num"].apply(
+            lambda x: docnum in [p.strip() for p in str(x).split(",") if p.strip()]
+        )
+        return merged.loc[mask, "emoji_category"].unique().tolist()
+
+    single_with_metadata["emoji_categories_list"] = single_with_metadata[
+        "proposal_doc_num"
+    ].apply(get_emoji_categories)
+
+    # Create binary column is_people_and_body if any category contains 'body'
+    def has_body(categories):
+        return any("body" in str(cat).lower() for cat in categories)
+
+    single_with_metadata["is_people_and_body"] = single_with_metadata[
+        "emoji_categories_list"
+    ].apply(has_body)
+
     # Add processing_time and nature columns
     EXCEPTION_LIMIT_DAYS = 1000  # Customize as needed
     single_with_metadata["processing_time"] = None
@@ -179,9 +198,7 @@ def main():
 
     # Export results
     single_with_metadata.to_excel("single_concept_accepted_proposals.xlsx", index=False)
-    comb_with_metadata.to_excel(
-        "combination_concept_accepted_proposals.xlsx", index=False
-    )
+    comb_with_metadata.to_excel("combination_concept_accepted_proposals.xlsx", index=False)
 
 
 if __name__ == "__main__":
