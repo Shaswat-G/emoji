@@ -146,7 +146,7 @@ class UTCThroughputAnalyzer:
             self.base_path, "single_concept_accepted_proposals.xlsx"
         )
         accepted_df = pd.read_excel(accepted_path)
-        self.accepted_proposals_df = accepted_df[(accepted_df["nature"] == "normal") & (accepted_df["is_people_and_body"] == True)].copy()
+        self.accepted_proposals_df = accepted_df[(accepted_df["nature"] == "normal") & (accepted_df["is_people_and_body"])].copy()
 
         # Load rejected proposals (only 'normal')
         rejected_path = os.path.join(self.base_path, "rejected_proposal_dataset.xlsx")
