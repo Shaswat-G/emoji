@@ -8,14 +8,6 @@ import logging
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
-from utc_doc_extractor import (
-    extract_text_by_extension,
-    extract_text_from_html,
-    extract_text_from_pdf,
-    preprocess_text,
-    download_document,
-)
-
 
 from utc_finding_proposals_llm_sweep import (
     load_file,
@@ -46,76 +38,35 @@ UTC_DOC_REG_COLS = [
 
 
 def process_document(row, output_dir):
-    """Process a single document: download, extract text, analyze, and save."""
+    """Read already processed document text from file."""
     doc_num = row["doc_num"]
-    doc_url = row["doc_url"]
-    extension = row["file_extension"]
 
-    error_message = ""
-
-    if not isinstance(doc_url, str) or not extension:
-        error_message = "Missing URL or unknown file type"
-        print(f"Skipping {doc_num}: {error_message}")
-        return {"error_message": error_message}, None
+    # Construct the filename for the already processed text file
+    text_file = os.path.join(output_dir, f"{doc_num.replace('/', '_')}.txt")
 
     try:
-        # Extract year from doc_num (format: L2/YY-XXX)
-        match = re.search(r"L2/(\d{2})-\d+", str(doc_num))
-        if not match:
-            error_message = f"Could not extract year from document number"
-            print(f"{error_message}: {doc_num}")
-            return {"error_message": error_message}, None
+        # Check if the processed text file exists
+        if not os.path.exists(text_file):
+            error_message = f"Processed text file not found: {text_file}"
+            print(f"Skipping {doc_num}: {error_message}")
+            return None, error_message
 
-        year = match.group(1)
-        full_url = f"https://www.unicode.org/L2/L20{year}/{doc_url}"
+        # Read the processed text from file
+        with open(text_file, "r", encoding="utf-8", errors="replace") as f:
+            processed_text = f.read()
 
-        print(f"Downloading: {full_url}")
-        content = download_document(full_url)
-        if content is None:
-            error_message = "Failed to download document"
-            return {"error_message": error_message}, None
-
-        # Extract and process text
-        text = extract_text_by_extension(content, extension)
-        if not text:
-            error_message = "No text extracted from document"
-            print(f"{error_message}: {doc_num}")
-            return {"error_message": error_message}, None
-
-        processed_text = preprocess_text(text)
-
-        # Save processed text to file with error handling
-        output_file = os.path.join(output_dir, f"{doc_num.replace('/', '_')}.txt")
-        try:
-            with open(output_file, "w", encoding="utf-8", errors="replace") as f:
-                f.write(processed_text)
-            return (processed_text, None)
-        except Exception as e:
-            error_message = f"Error writing text file: {str(e)}"
+        if not processed_text or not processed_text.strip():
+            error_message = "Empty text file"
             print(f"Warning - {error_message} for {doc_num}")
-            # Try again with a more aggressive error handling approach
-            try:
-                cleaned_text = "".join(
-                    char if ord(char) < 0x10000 else "?" for char in processed_text
-                )
-                with open(output_file, "w", encoding="utf-8") as f:
-                    f.write(cleaned_text)
-                error_message += " (Cleaned text was saved)"
-                return (cleaned_text, error_message)
-            except Exception as e2:
-                error_message += f" | Second attempt failed: {str(e2)}"
-                print(f"Failed to save text for {doc_num}: {e2}")
-                # Create an empty file as a placeholder
-                try:
-                    with open(output_file, "w", encoding="utf-8") as f:
-                        f.write(f"Error processing document {doc_num}: {error_message}")
-                except:
-                    pass
-                return (None, error_message)
+            return None, error_message
+
+        print(f"Loaded processed text for: {doc_num}")
+        return processed_text, None
+
     except Exception as e:
-        error_message = f"General error processing document {doc_num}: {str(e)}"
+        error_message = f"Error reading processed text file for {doc_num}: {str(e)}"
         print(error_message)
-        return (None, error_message)
+        return None, error_message
 
 
 def process_row(
