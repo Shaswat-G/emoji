@@ -1,7 +1,7 @@
 # Paths
-system_prompt_path: "system_prompt_for_finding_proposals.txt"
-user_prompt_path: "user_prompt_for_finding_proposals.txt"
-api_key_path: "api_key.txt"
+system_prompt_file_name: "system_prompt_for_finding_gender_docs.txt"
+user_prompt_file_name: "user_prompt_for_finding_gender_docs.txt"
+api_key_file_name: "api_key.txt"
 
 # API settings
 model: "gpt-4o-mini-2024-07-18"
