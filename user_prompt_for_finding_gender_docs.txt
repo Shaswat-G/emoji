@@ -1,9 +1,22 @@
-### BEGIN DOCUMENT
+You are given a Unicode TC document (whole or chunk). Return ONLY a JSON object that conforms exactly to the provided schema. Do not include any explanation.
+
 Subject: {SUBJECT_LINE}
 
 Summary: {SUMMARY}
 
-Description: {DESCRIPTION}
+Contents : {CONTENTS}
 
-Old classifier answer: {OLD_CLASSIFIER_ANSWER}
-### END DOCUMENT
+Tasks:
+
+1. Determine `expliciteness` of gender (identity/presentation in emoji design/policy) in this text: `"none"`, `"passing_mention"`, `"section_level"`, or `"document_core"`.
+2. Estimate `coverage_pct` (0–100) for this text.
+3. Select all applicable `subthemes` from the enum list (zero or more).
+4. Provide verbatim supporting `evidence` quotes (≤ 4 is fine) with optional `loc` if available.
+5. Set `confidence` (1–10) in your labeling.
+
+Important:
+
+* If the text only mentions grammatical gender or unrelated Unicode properties without tying to emoji human gender/identity/presentation, treat as not relevant.
+* If evidence is insufficient, output `"none"`, `0`, `[]`, `[]`, and an honest `confidence`.
+
+Output: a single JSON object exactly matching the schema. No extra fields. No commentary.
