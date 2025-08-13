@@ -239,11 +239,7 @@ if __name__ == "__main__":
         file_name = "utc_email_combined_with_llm_extraction_doc_ref.xlsx"
         file_path = os.path.join(BASE_PATH, file_name)
 
-        df = (
-            pd.read_excel(file_path, usecols=EMAIL_COLS)
-            .sample(20)
-            .reset_index(drop=True)
-        )  # Process 20 emails for testing
+        df = (pd.read_excel(file_path, usecols=EMAIL_COLS))
 
         logging.info(f"Loaded {df.shape[0]} emails for processing")
         logging.info(f"Using {NUM_WORKERS} workers for parallel processing")
