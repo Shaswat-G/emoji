@@ -148,9 +148,7 @@ def process_row(row_data, client, config, system_prompt, user_prompt_template):
     return result
 
 
-def process_batch(
-    batch_df, batch_indices, client, config, system_prompt, user_prompt_template
-):
+def process_batch(batch_df, batch_indices, client, config, system_prompt, user_prompt_template):
     """Process a batch of rows and return results as a DataFrame."""
     results = []
     for i, row in zip(batch_indices, batch_df.itertuples(index=False)):
@@ -236,11 +234,10 @@ def safe_save_to_excel(df, file_path, csv_backup=True):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
     config = load_config("config_for_finding_proposals.yml")
+    
     if config is None:
         logging.error("Exiting due to missing config.")
     else:
@@ -271,15 +268,8 @@ if __name__ == "__main__":
                 logging.info(f"Processing {total_rows} rows")
 
                 # Modulo-based assignment of rows to workers
-                worker_indices = [
-                    [i for i in range(total_rows) if i % NUM_WORKERS == worker_id]
-                    for worker_id in range(NUM_WORKERS)
-                ]
-                batches = [
-                    (df.iloc[indices].copy(), indices)
-                    for indices in worker_indices
-                    if indices
-                ]
+                worker_indices = [[i for i in range(total_rows) if i % NUM_WORKERS == worker_id] for worker_id in range(NUM_WORKERS)]
+                batches = [(df.iloc[indices].copy(), indices) for indices in worker_indices if indices]
 
                 # Function for worker
                 def worker(batch_df, batch_indices):
@@ -294,9 +284,7 @@ if __name__ == "__main__":
 
                 # Run batches in parallel
                 all_results = [None] * len(batches)
-                logging.info(
-                    f"Detected {NUM_WORKERS//2} CPU cores. Using {NUM_WORKERS} workers for batch processing."
-                )
+                logging.info(f"Detected {NUM_WORKERS//2} CPU cores. Using {NUM_WORKERS} workers for batch processing.")
                 with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
                     future_to_batch = {
                         executor.submit(worker, batch_df, batch_indices): idx
@@ -311,9 +299,7 @@ if __name__ == "__main__":
                             interim_file_name = f"utc_register_with_llm_document_classification_interim_batch_{batch_idx}.xlsx"
                             interim_path = os.path.join(base_path, interim_file_name)
                             safe_save_to_excel(batch_result_df, interim_path)
-                            logging.info(
-                                f"Saved interim batch results for batch {batch_idx}"
-                            )
+                            logging.info(f"Saved interim batch results for batch {batch_idx}")
                             # Merge batch results into main df for final output
                             for _, row in batch_result_df.iterrows():
                                 i = row["idx"]
@@ -331,6 +317,4 @@ if __name__ == "__main__":
                 if safe_save_to_excel(df, output_path):
                     logging.info(f"Processing complete. Results saved successfully.")
                 else:
-                    logging.error(
-                        f"Processing complete but encountered issues saving results."
-                    )
+                    logging.error(f"Processing complete but encountered issues saving results.")
