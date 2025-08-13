@@ -271,7 +271,12 @@ if __name__ == "__main__":
             pd.read_excel(file_path, usecols=UTC_DOC_REG_COLS)
             .sample(20)
             .reset_index(drop=True)
-        )  # Reset index after sampling
+        df_full = pd.read_excel(file_path, usecols=UTC_DOC_REG_COLS)
+        if sample_size is not None:
+            df = df_full.sample(int(sample_size)).reset_index(drop=True)
+        else:
+            df = df_full.reset_index(drop=True)
+        # Reset index after sampling
 
         logging.info(f"Loaded {len(df)} documents for processing")
         logging.info(f"Using {NUM_WORKERS} workers for parallel processing")
