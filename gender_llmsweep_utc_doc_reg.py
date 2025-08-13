@@ -1,3 +1,20 @@
+# -----------------------------------------------------------------------------
+# Script: gender_llmsweep_utc_doc_reg.py
+# Summary: Analyzes gender-related content in UTC documents using LLM processing.
+#          Reads pre-processed document texts, applies gender analysis via OpenAI API,
+#          and extracts metrics including explicitness, coverage, themes, and confidence.
+# Inputs:  utc_register_with_llm_extraction.xlsx (document register with metadata),
+#          extracted_texts/ (directory of pre-processed document text files),
+#          config_for_finding_gender_docs.yml (LLM configuration),
+#          system/user prompt files for gender analysis
+# Outputs: gender_llmsweep_results.xlsx (final results with gender analysis),
+#          gender_llmsweep_interim_batch_*.xlsx (interim batch saves)
+# Features: Parallel processing with ThreadPoolExecutor, batch processing,
+#          interim saves, comprehensive error handling, progress tracking
+# Context: Part of emoji proposal research pipeline analyzing gender representation
+#          and discourse patterns in Unicode Technical Committee documents.
+# -----------------------------------------------------------------------------
+
 import os
 import json
 import pandas as pd
@@ -250,9 +267,11 @@ if __name__ == "__main__":
 
         file_name = "utc_register_with_llm_extraction.xlsx"
         file_path = os.path.join(BASE_PATH, file_name)
-        df = pd.read_excel(file_path, usecols=UTC_DOC_REG_COLS).head(
-            20
-        )  # Process 20 for testing
+        df = (
+            pd.read_excel(file_path, usecols=UTC_DOC_REG_COLS)
+            .sample(20)
+            .reset_index(drop=True)
+        )  # Reset index after sampling
 
         logging.info(f"Loaded {len(df)} documents for processing")
         logging.info(f"Using {NUM_WORKERS} workers for parallel processing")
