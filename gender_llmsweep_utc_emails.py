@@ -50,60 +50,23 @@ EMAIL_COLS = [
 ]
 
 
-def preprocess_email_text(subject, body):
-    """Preprocess email subject and body text for analysis."""
-    try:
-        # Handle None values
-        subject = str(subject) if subject is not None else ""
-        body = str(body) if body is not None else ""
-
-        # Clean up common email artifacts
-        body = re.sub(
-            r"^On .* wrote:", "", body, flags=re.MULTILINE
-        )  # Remove reply headers
-        body = re.sub(
-            r"^From:.*?Subject:.*?\n", "", body, flags=re.MULTILINE | re.DOTALL
-        )  # Remove forwarded headers
-        body = re.sub(
-            r"^\s*>.*", "", body, flags=re.MULTILINE
-        )  # Remove quoted text lines
-        body = re.sub(r"\n{3,}", "\n\n", body)  # Normalize multiple newlines
-
-        # Combine subject and body
-        combined_text = f"Subject: {subject}\n\nBody: {body}".strip()
-
-        # Basic text cleaning
-        combined_text = re.sub(r"\s+", " ", combined_text)  # Normalize whitespace
-        combined_text = re.sub(
-            r"[^\x00-\x7F]+", " ", combined_text
-        )  # Remove non-ASCII characters
-
-        return combined_text
-    except Exception as e:
-        logging.warning(f"Error preprocessing email text: {str(e)}")
-        return f"Subject: {subject}\n\nBody: {body}" if subject or body else ""
-
-
 def process_email(row):
-    """Process a single email: preprocess text and prepare for analysis."""
+    """Process a single email: basic validation and prepare for analysis."""
     try:
         subject = row.get("subject", "")
         body = row.get("body", "")
+
+        # Convert None to empty string
+        subject = str(subject) if subject is not None else ""
+        body = str(body) if body is not None else ""
 
         if not subject and not body:
             error_message = "Both subject and body are empty"
             print(f"Skipping email: {error_message}")
             return None, error_message
 
-        processed_text = preprocess_email_text(subject, body)
-
-        if not processed_text or len(processed_text.strip()) == 0:
-            error_message = "No text after preprocessing"
-            print(f"Warning - {error_message}")
-            return None, error_message
-
         print(f"Processed email with subject: {subject[:50]}...")
-        return processed_text, None
+        return True, None  # Just return success flag
 
     except Exception as e:
         error_message = f"Error processing email: {str(e)}"
@@ -111,15 +74,12 @@ def process_email(row):
         return None, error_message
 
 
-def process_row(
-    row, processed_text, client, config, system_prompt, user_prompt_template
-):
+def process_row(row, client, config, system_prompt, user_prompt_template):
     """Process a single row with LLM API call and JSON parsing."""
     try:
         user_prompt = user_prompt_template.format(
             SUBJECT_LINE=row.get("subject", ""),
             BODY=row.get("body", ""),
-            CONTENTS=processed_text,
         )
 
         content, tokens, cost, error = call_llm_api(
@@ -160,22 +120,13 @@ def process_batch(
 
         try:
             # Process email
-            processed_text, processing_error = process_email(row)
+            email_valid, processing_error = process_email(row)
 
-            # Call LLM API if text processing succeeded
+            # Call LLM API if email is valid
             api_response, api_error = None, None
-            if (
-                isinstance(processed_text, str)
-                and processed_text
-                and len(processed_text.strip()) > 0
-            ):
-                # Truncate text if too long
-                if len(processed_text) > MAX_CHARS:
-                    processed_text = processed_text[:MAX_CHARS] + "...[truncated]"
-
+            if email_valid:
                 api_response, api_error = process_row(
                     row,
-                    processed_text,
                     client,
                     config,
                     system_prompt,
@@ -185,7 +136,6 @@ def process_batch(
             return {
                 "idx": idx,
                 "email_identifier": email_identifier,
-                "processed_text": processed_text,
                 "processing_error": processing_error,
                 "api_response": api_response,
                 "api_error": api_error,
@@ -195,7 +145,6 @@ def process_batch(
             return {
                 "idx": idx,
                 "email_identifier": email_identifier,
-                "processed_text": None,
                 "processing_error": str(e),
                 "api_response": None,
                 "api_error": None,
@@ -224,7 +173,6 @@ def process_batch(
                     {
                         "idx": row_data[0],
                         "email_identifier": f"email_{row_data[0]}_error",
-                        "processed_text": None,
                         "processing_error": str(e),
                         "api_response": None,
                         "api_error": None,
@@ -288,19 +236,16 @@ if __name__ == "__main__":
         )
 
         client = OpenAI(api_key=api_key)
-
-        # User should specify the email workbook file name
-        file_name = "utc_email_archive.xlsx"  # Update this to match your email file
+        file_name = "utc_email_combined_with_llm_extraction_doc_ref.xlsx"
         file_path = os.path.join(BASE_PATH, file_name)
 
-        # Load email data - update sheet name and columns as needed
         df = (
             pd.read_excel(file_path, usecols=EMAIL_COLS)
             .sample(20)
             .reset_index(drop=True)
         )  # Process 20 emails for testing
 
-        logging.info(f"Loaded {len(df)} emails for processing")
+        logging.info(f"Loaded {df.shape[0]} emails for processing")
         logging.info(f"Using {NUM_WORKERS} workers for parallel processing")
 
         # Initialize empty columns for API and error fields
