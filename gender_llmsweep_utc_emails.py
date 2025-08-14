@@ -39,7 +39,7 @@ BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 # ------------------ Configurable Constants ------------------
 BATCH_SIZE = 4  # Number of emails per batch
 MAX_CHARS = 12000  # Max chars for LLM prompt input
-INTERIM_SAVE_INTERVAL = 4  # Save every batch for testing
+INTERIM_SAVE_INTERVAL = 50  # Save every batch for testing
 # Detect number of CPU cores and set number of workers
 NUM_WORKERS = 2 * multiprocessing.cpu_count()
 # -----------------------------------------------------------
@@ -116,7 +116,7 @@ def process_batch(
 
     def process_single_email(row_data):
         idx, row = row_data
-        email_identifier = f"email_{idx}_{row.get('subject', 'no_subject')[:30]}"
+        email_identifier = f"email_{idx}_{str(row.get('subject', 'no_subject'))[:30]}"
 
         try:
             # Process email
