@@ -65,7 +65,7 @@ def process_email(row):
             print(f"Skipping email: {error_message}")
             return None, error_message
 
-        print(f"Processed email with subject: {subject[:50]}...")
+        print(f"Processed email with subject: {str(subject)[:50]}...")
         return True, None  # Just return success flag
 
     except Exception as e:
@@ -78,8 +78,8 @@ def process_row(row, client, config, system_prompt, user_prompt_template):
     """Process a single row with LLM API call and JSON parsing."""
     try:
         user_prompt = user_prompt_template.format(
-            SUBJECT_LINE=row.get("subject", ""),
-            BODY=row.get("body", ""),
+            SUBJECT_LINE=str(row.get("subject", "")),
+            BODY=str(row.get("body", "")),
         )
 
         content, tokens, cost, error = call_llm_api(
@@ -92,13 +92,13 @@ def process_row(row, client, config, system_prompt, user_prompt_template):
                 content = json.loads(content)
             except json.JSONDecodeError:
                 logging.warning(
-                    f"Failed to parse JSON response for email with subject: {row.get('subject', 'unknown')[:50]}"
+                    f"Failed to parse JSON response for email with subject: {str(row.get('subject', 'unknown'))[:50]}"
                 )
 
         return content, error
     except Exception as e:
         logging.error(
-            f"Error processing row for email with subject: {row.get('subject', 'unknown')[:50]}: {str(e)}"
+            f"Error processing row for email with subject: {str(row.get('subject', 'unknown'))[:50]}: {str(e)}"
         )
         return None, str(e)
 
@@ -167,7 +167,7 @@ def process_batch(
             except Exception as e:
                 row_data = future_to_row[future]
                 logging.error(
-                    f"Batch processing failed for email {row_data[1].get('subject', 'unknown')[:30]}: {str(e)}"
+                    f"Batch processing failed for email {str(row_data[1].get('subject', 'unknown'))[:30]}: {str(e)}"
                 )
                 results.append(
                     {
@@ -180,6 +180,46 @@ def process_batch(
                 )
 
     return results
+
+
+def find_latest_interim_batch(base_path):
+    """Find the latest interim batch file and return batch number."""
+    import glob
+
+    pattern = os.path.join(base_path, "gender_llmsweep_email_interim_batch_*.xlsx")
+    interim_files = glob.glob(pattern)
+
+    if not interim_files:
+        return None, None
+
+    # Extract batch numbers and find the latest
+    batch_numbers = []
+    for file in interim_files:
+        try:
+            # Extract number from filename like "gender_llmsweep_email_interim_batch_4.xlsx"
+            batch_num = int(os.path.basename(file).split("_")[-1].split(".")[0])
+            batch_numbers.append((batch_num, file))
+        except (ValueError, IndexError):
+            continue
+
+    if batch_numbers:
+        latest_batch_num, latest_file = max(batch_numbers, key=lambda x: x[0])
+        return latest_batch_num, latest_file
+
+    return None, None
+
+
+def load_interim_results(interim_file_path):
+    """Load interim results and return the dataframe."""
+    try:
+        df = pd.read_excel(interim_file_path)
+        logging.info(f"Loaded interim results from: {interim_file_path}")
+        return df
+    except Exception as e:
+        logging.error(
+            f"Failed to load interim results from {interim_file_path}: {str(e)}"
+        )
+        return None
 
 
 def save_batch_results(df, batch_results, batch_num, base_path):
@@ -239,19 +279,43 @@ if __name__ == "__main__":
         file_name = "utc_email_combined_with_llm_extraction_doc_ref.xlsx"
         file_path = os.path.join(BASE_PATH, file_name)
 
-        df = (pd.read_excel(file_path, usecols=EMAIL_COLS))
+        # Check for existing interim results to resume from
+        latest_batch_num, latest_interim_file = find_latest_interim_batch(BASE_PATH)
+
+        if latest_batch_num and latest_interim_file:
+            logging.info(
+                f"Found interim results up to batch {latest_batch_num}. Resuming from there..."
+            )
+            df = load_interim_results(latest_interim_file)
+            if df is None:
+                logging.info("Failed to load interim results. Starting fresh...")
+                df = pd.read_excel(file_path, usecols=EMAIL_COLS)
+                # Initialize empty columns for API and error fields
+                df["gender_expliciteness"] = ""
+                df["gender_coverage_pct"] = np.nan
+                df["gender_subthemes"] = ""
+                df["gender_evidence"] = ""
+                df["gender_confidence"] = np.nan
+                df["gender_api_error"] = ""
+                df["gender_processing_error"] = ""
+                start_batch = 0
+            else:
+                start_batch = latest_batch_num
+        else:
+            logging.info("No interim results found. Starting fresh...")
+            df = pd.read_excel(file_path, usecols=EMAIL_COLS)
+            # Initialize empty columns for API and error fields
+            df["gender_expliciteness"] = ""
+            df["gender_coverage_pct"] = np.nan
+            df["gender_subthemes"] = ""
+            df["gender_evidence"] = ""
+            df["gender_confidence"] = np.nan
+            df["gender_api_error"] = ""
+            df["gender_processing_error"] = ""
+            start_batch = 0
 
         logging.info(f"Loaded {df.shape[0]} emails for processing")
         logging.info(f"Using {NUM_WORKERS} workers for parallel processing")
-
-        # Initialize empty columns for API and error fields
-        df["gender_expliciteness"] = ""
-        df["gender_coverage_pct"] = np.nan
-        df["gender_subthemes"] = ""
-        df["gender_evidence"] = ""
-        df["gender_confidence"] = np.nan
-        df["gender_api_error"] = ""
-        df["gender_processing_error"] = ""
 
         # Process in batches
         total_rows = len(df)
@@ -260,8 +324,9 @@ if __name__ == "__main__":
         logging.info(
             f"Processing {total_rows} emails in {num_batches} batches of {BATCH_SIZE}"
         )
+        logging.info(f"Starting from batch {start_batch + 1}")
 
-        for batch_num in range(num_batches):
+        for batch_num in range(start_batch, num_batches):
             start_idx = batch_num * BATCH_SIZE
             end_idx = min(start_idx + BATCH_SIZE, total_rows)
             batch_indices = list(range(start_idx, end_idx))
