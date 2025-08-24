@@ -1,27 +1,29 @@
 # Accepted vs Rejected Emoji Proposal Analysis
 
-*Generated on: 2025-08-08 07:45:39*
+*Generated on: 2025-08-20 12:41:59*
 
 ## Overview
 
-- **Accepted Proposals**: 170
+- **Accepted Proposals**: 219
 - **Rejected Proposals**: 134
-- **Total Proposals**: 304
+- **Total Proposals**: 353
 
 ## Key Findings
 
 - **Processing Days**: Accepted proposals have higher values than rejected proposals (p < 0.05)
+- **Reference Count**: Accepted proposals have higher values than rejected proposals (p < 0.05)
 - **Max Dormancy Days**: Accepted proposals have higher values than rejected proposals (p < 0.05)
+- **Unique People**: Accepted proposals have higher values than rejected proposals (p < 0.05)
 - **Unique Entities**: Accepted proposals have lower values than rejected proposals (p < 0.05)
 
 ## Detailed Metrics Comparison
 
 | Metric | Accepted Mean | Rejected Mean | Change | P-Value | Significant |
 |--------|---------------|---------------|--------|---------|-------------|
-| Processing Days | 324.31 | 110.10 | -66.1% | 0.000 | Yes |
-| Reference Count | 4.03 | 3.93 | -2.6% | 0.422 | No |
-| Max Dormancy Days | 159.31 | 76.14 | -52.2% | 0.000 | Yes |
-| Unique People | 48.04 | 47.99 | -0.1% | 0.475 | No |
-| Unique Entities | 10.37 | 14.75 | +42.3% | 0.000 | Yes |
+| Processing Days | 394.68 | 110.10 | -72.1% | 0.000 | Yes |
+| Reference Count | 4.23 | 3.93 | -7.2% | 0.025 | Yes |
+| Max Dormancy Days | 167.60 | 76.14 | -54.6% | 0.000 | Yes |
+| Unique People | 51.76 | 47.99 | -7.3% | 0.023 | Yes |
+| Unique Entities | 11.27 | 14.75 | +30.9% | 0.000 | Yes |
 
 *See accompanying visualizations for charts.*

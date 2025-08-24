@@ -1,38 +1,38 @@
 # Era Comparison: Overall, Accepted, and Rejected Proposals
 
-*Generated on: 2025-08-08 07:45:40*
+*Generated on: 2025-08-20 12:42:00*
 
 ## All Proposals
 
-- **Pre-2017 Proposals**: 108
-- **Post-2017 Proposals**: 196
-- **Total Proposals**: 304
+- **Pre-2017 Proposals**: 117
+- **Post-2017 Proposals**: 236
+- **Total Proposals**: 353
 
 ### Detailed Metrics Comparison
 
 | Metric | Pre-2017 Mean | Post-2017 Mean | Change | P-Value | Significant |
 |--------|---------------|----------------|---------|---------|-------------|
-| Processing Days | 158.00 | 269.50 | +70.6% | 0.000 | Yes |
-| Reference Count | 5.02 | 3.41 | -32.0% | 0.000 | Yes |
-| Max Dormancy Days | 75.84 | 148.44 | +95.7% | 0.000 | Yes |
-| Unique People | 56.41 | 43.40 | -23.1% | 0.000 | Yes |
-| Unique Entities | 17.25 | 9.58 | -44.5% | 0.000 | Yes |
+| Processing Days | 189.75 | 334.69 | +76.4% | 0.000 | Yes |
+| Reference Count | 5.07 | 3.64 | -28.2% | 0.000 | Yes |
+| Max Dormancy Days | 88.35 | 154.96 | +75.4% | 0.000 | Yes |
+| Unique People | 57.50 | 46.78 | -18.6% | 0.000 | Yes |
+| Unique Entities | 17.45 | 10.19 | -41.6% | 0.000 | Yes |
 
 ## Accepted Proposals
 
-- **Pre-2017 Proposals**: 32
-- **Post-2017 Proposals**: 138
-- **Total Proposals**: 170
+- **Pre-2017 Proposals**: 41
+- **Post-2017 Proposals**: 178
+- **Total Proposals**: 219
 
 ### Detailed Metrics Comparison
 
 | Metric | Pre-2017 Mean | Post-2017 Mean | Change | P-Value | Significant |
 |--------|---------------|----------------|---------|---------|-------------|
-| Processing Days | 262.16 | 338.72 | +29.2% | 0.000 | Yes |
-| Reference Count | 6.81 | 3.38 | -50.3% | 0.000 | Yes |
-| Max Dormancy Days | 72.22 | 179.51 | +148.6% | 0.000 | Yes |
-| Unique People | 66.19 | 43.83 | -33.8% | 0.000 | Yes |
-| Unique Entities | 18.06 | 8.59 | -52.5% | 0.000 | Yes |
+| Processing Days | 329.90 | 409.60 | +24.2% | 0.000 | Yes |
+| Reference Count | 6.56 | 3.69 | -43.7% | 0.000 | Yes |
+| Max Dormancy Days | 108.71 | 181.17 | +66.7% | 0.000 | Yes |
+| Unique People | 67.15 | 48.21 | -28.2% | 0.000 | Yes |
+| Unique Entities | 18.46 | 9.62 | -47.9% | 0.000 | Yes |
 
 ## Rejected Proposals
 

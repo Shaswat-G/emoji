@@ -7,14 +7,15 @@
 # -----------------------------------------------------------------------------
 
 import os
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import warnings
 from datetime import datetime
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 from scipy import stats
 from tqdm import tqdm
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -22,10 +23,10 @@ CUT_OFF_DATE = datetime(2017, 1, 1)  # Date to classify proposals before/after
 
 # Import functions from the triangulator
 from utc_proposal_triangulator import (
-    normalize_doc_num,
-    track_proposal_through_time,
     analyze_proposal_context,
+    normalize_doc_num,
     safe_literal_eval,
+    track_proposal_through_time,
 )
 
 
@@ -74,7 +75,7 @@ class UTCThroughputAnalyzer:
             axes[1].set_xlabel("Era")
             plt.tight_layout()
             plt.savefig(
-                os.path.join(output_dir, f"p&b_era_comparison_boxplots_{key}.png"),
+                os.path.join(output_dir, f"era_comparison_boxplots_{key}.png"),
                 dpi=300,
                 bbox_inches="tight",
             )
@@ -85,7 +86,7 @@ class UTCThroughputAnalyzer:
         """
         Generate Markdown report for pre/post 2017, split by status (overall, accepted, rejected)
         """
-        report_path = os.path.join(output_dir, "p&b_era_comparison_by_status_report.md")
+        report_path = os.path.join(output_dir, "era_comparison_by_status_report.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("# Era Comparison: Overall, Accepted, and Rejected Proposals\n\n")
             f.write(
@@ -146,7 +147,10 @@ class UTCThroughputAnalyzer:
             self.base_path, "single_concept_accepted_proposals.xlsx"
         )
         accepted_df = pd.read_excel(accepted_path)
-        self.accepted_proposals_df = accepted_df[(accepted_df["nature"] == "normal") & (accepted_df["is_people_and_body"])].copy()
+        # self.accepted_proposals_df = accepted_df[(accepted_df["nature"] == "normal") & (accepted_df["is_people_and_body"])].copy()
+        self.accepted_proposals_df = accepted_df[
+            accepted_df["nature"] == "normal"
+        ].copy()
 
         # Load rejected proposals (only 'normal')
         rejected_path = os.path.join(self.base_path, "rejected_proposal_dataset.xlsx")
@@ -399,7 +403,7 @@ class UTCThroughputAnalyzer:
         plt.xlabel("Proposal Status")
         plt.tight_layout()
         plt.savefig(
-            os.path.join(output_dir, "p&b_accepted_vs_rejected_processing_time.png"),
+            os.path.join(output_dir, "accepted_vs_rejected_processing_time.png"),
             dpi=300,
             bbox_inches="tight",
         )
@@ -412,7 +416,7 @@ class UTCThroughputAnalyzer:
         plt.xlabel("Proposal Status")
         plt.tight_layout()
         plt.savefig(
-            os.path.join(output_dir, "p&b_accepted_vs_rejected_reference_count.png"),
+            os.path.join(output_dir, "accepted_vs_rejected_reference_count.png"),
             dpi=300,
             bbox_inches="tight",
         )
@@ -424,7 +428,7 @@ class UTCThroughputAnalyzer:
         """
         Generate Markdown report for accepted vs rejected proposals (overall)
         """
-        report_path = os.path.join(output_dir, "p&b_accepted_vs_rejected_report.md")
+        report_path = os.path.join(output_dir, "accepted_vs_rejected_report.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("# Accepted vs Rejected Emoji Proposal Analysis\n\n")
             f.write(
@@ -583,7 +587,7 @@ class UTCThroughputAnalyzer:
 
         plt.tight_layout()
         plt.savefig(
-            os.path.join(output_dir, "p&b_era_comparison_boxplots.png"),
+            os.path.join(output_dir, "era_comparison_boxplots.png"),
             dpi=300,
             bbox_inches="tight",
         )
@@ -610,7 +614,7 @@ class UTCThroughputAnalyzer:
         plt.xticks(rotation=45)
         plt.tight_layout()
         plt.savefig(
-            os.path.join(output_dir, "p&b_proposals_timeline.png"),
+            os.path.join(output_dir, "proposals_timeline.png"),
             dpi=300,
             bbox_inches="tight",
         )
@@ -618,13 +622,11 @@ class UTCThroughputAnalyzer:
 
         print(f"Visualizations saved to {output_dir}")
 
-    def generate_report(
-        self, metrics_df, comparison_results, output_dir
-    ):
+    def generate_report(self, metrics_df, comparison_results, output_dir):
         """
         Generate comprehensive Markdown report
         """
-        report_path = os.path.join(output_dir, "p&b_throughput_analysis_report.md")
+        report_path = os.path.join(output_dir, "throughput_analysis_report.md")
 
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("# UTC Emoji Proposal Throughput Analysis\n\n")
@@ -751,10 +753,10 @@ class UTCThroughputAnalyzer:
         )
 
         # Save processed data
-        data_path = os.path.join(output_dir, "p&b_proposal_metrics_2017.csv")
+        data_path = os.path.join(output_dir, "proposal_metrics_2017.csv")
         metrics_df.to_csv(data_path, index=False)
 
-        print(f"\n✅ Analysis complete!")
+        print("\n✅ Analysis complete!")
         print(f"📊 Status Report: {status_report_path}")
         print(f"📊 Era Comparison Report: {era_report_path}")
         print(f"📈 Visualizations: {output_dir}")

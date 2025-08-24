@@ -11,9 +11,10 @@
 #          ensure comprehensive coverage of Unicode emoji proposal history.
 # -----------------------------------------------------------------------------
 
-import os
-import pandas as pd
 import ast
+import os
+
+import pandas as pd
 
 
 def safe_literal_eval(val):
@@ -55,12 +56,11 @@ def in_range(s):
 
 
 def filter_utc_doc_reg(df):
-
     return (
         (df["is_emoji_proposal"] == True)
         | (df["is_emoji_mechanism"] == True)
         | (df["is_ideological_argument"] == True)
-    )
+    ) & df["doc_num"].apply(in_range)
 
 
 def filter_emoji_proposals(df):
@@ -78,7 +78,7 @@ def filter_cb_rejections(df):
 # )
 
 all_identified_emoji_proposals = load_set_from_excel(
-    "utc_register_with_llm_document_classification_with_missed.xlsx",
+    "utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx",
     "doc_num",
     filter_utc_doc_reg,
 )
@@ -123,7 +123,7 @@ print(f"Charlotte Buff's rejected list: {len(charlotte_buff_rejected)}")
 print(f"Known accepted proposals: {len(known_accepted_proposals)}")
 print(f"Calculated rejected proposals: {len(calculated_rejected)}")
 
-print(f"\nIDENTIFICATION SYSTEM ACCURACY ANALYSIS:")
+print("\nIDENTIFICATION SYSTEM ACCURACY ANALYSIS:")
 print("=" * 50)
 print(f"Known accepted proposals found by our system: {len(accepted_found)}")
 print(f"Known accepted proposals missed by our system: {len(accepted_missing)}")
@@ -147,9 +147,9 @@ if len(known_accepted_proposals) > 0:
 
 # Analysis of what we're missing
 if accepted_missing:
-    print(f"\nMISSED ACCEPTED PROPOSALS ANALYSIS:")
+    print("\nMISSED ACCEPTED PROPOSALS ANALYSIS:")
     print(f"We missed {len(accepted_missing)} accepted proposals")
-    print(f"Sample missed accepted proposals:")
+    print("Sample missed accepted proposals:")
     for doc in list(accepted_missing)[:10]:
         print(f"  {doc}")
 
@@ -157,10 +157,10 @@ if accepted_missing:
 extra_identified = (
     all_identified_emoji_proposals - known_accepted_proposals - charlotte_buff_rejected
 )
-print(f"\nIDENTIFICATION QUALITY:")
+print("\nIDENTIFICATION QUALITY:")
 print(f"Novel proposals identified (not in any known list): {len(extra_identified)}")
 if extra_identified:
-    print(f"Sample novel identifications:")
+    print("Sample novel identifications:")
     for doc in list(extra_identified)[:10]:
         print(f"  {doc}")
 
@@ -170,11 +170,11 @@ if our_recall > 0:
     estimated_missing_accepted = estimated_total_accepted - len(
         known_accepted_proposals
     )
-    print(f"\nCOMPLETENESS ESTIMATION:")
+    print("\nCOMPLETENESS ESTIMATION:")
     print(f"Estimated total accepted proposals: {estimated_total_accepted:.0f}")
     print(f"Estimated missing from accepted list: {estimated_missing_accepted:.0f}")
 
-print(f"\nVALIDATION:")
+print("\nVALIDATION:")
 print(f"CB recall (rejected found): {cb_recall:.1f}%")
 print(f"CB precision: {cb_precision:.1f}%")
 print(f"Missing from CB's list: {len(missing_from_cb)}")
@@ -182,12 +182,12 @@ print(f"Extra in CB's list: {len(extra_in_cb)}")
 print(f"False rejects in CB's list: {len(false_rejects)}")
 
 if missing_from_cb:
-    print(f"\nSample missing rejected proposals:")
+    print("\nSample missing rejected proposals:")
     for doc in list(missing_from_cb)[:10]:
         print(f"  {doc}")
 
 if false_rejects:
-    print(f"\nWARNING - Accepted proposals in rejected list:")
+    print("\nWARNING - Accepted proposals in rejected list:")
     for doc in list(false_rejects)[:5]:
         print(f"  {doc}")
 

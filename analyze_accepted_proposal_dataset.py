@@ -81,20 +81,9 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # Load datasets
-    merged = pd.read_excel(
-        os.path.join(base_dir, "emoji_accepted_proposal_dataset.xlsx")
-    )
-    utc_doc_reg = pd.read_excel(
-        os.path.join(
-            base_dir,
-            "utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx",
-        )
-    )
-    utc_doc_reg = (
-        utc_doc_reg[["doc_num"] + META_COLS]
-        .drop_duplicates(subset="doc_num")
-        .reset_index(drop=True)
-    )
+    merged = pd.read_excel(os.path.join(base_dir, "emoji_accepted_proposal_dataset.xlsx"))
+    utc_doc_reg = pd.read_excel(os.path.join(base_dir,"utc_register_with_llm_document_classification_and_emoji_proposal_markings.xlsx"))
+    utc_doc_reg = (utc_doc_reg[["doc_num"] + META_COLS].drop_duplicates(subset="doc_num").reset_index(drop=True))
 
     # Helper to filter docnums by year range
     def in_year_range(docnum):
@@ -102,27 +91,11 @@ def main():
         return year is not None and 2010 <= year <= 2020
 
     # Extract single concept proposals
-    single_filter = (merged["accepted_proposal_type"] == "single_concept_proposal") & (
-        merged["proposal_doc_num"] != "-"
-    )
-    single_proposals = set(
-        filter(
-            in_year_range,
-            split_and_flatten_proposals(merged[single_filter]["proposal_doc_num"]),
-        )
-    )
+    single_filter = (merged["accepted_proposal_type"] == "single_concept_proposal") & (merged["proposal_doc_num"] != "-")
+    single_proposals = set(filter(in_year_range, split_and_flatten_proposals(merged[single_filter]["proposal_doc_num"])))
 
     # Process combination proposals
-    comb_proposals = list(
-        filter(
-            in_year_range,
-            split_and_flatten_proposals(
-                merged[merged["accepted_proposal_type"] == "combination_proposal"][
-                    "proposal_doc_num"
-                ]
-            ),
-        )
-    )
+    comb_proposals = list(filter(in_year_range, split_and_flatten_proposals(merged[merged["accepted_proposal_type"] == "combination_proposal"]["proposal_doc_num"])))
 
     # Generate counts and merge with metadata
     single_counts = create_proposal_counts(single_proposals)
@@ -133,13 +106,9 @@ def main():
 
     # Compute acceptance_date for each proposal in single_with_metadata
     merged_dates = merged.copy()
-    merged_dates["proposal_doc_num_list"] = merged_dates["proposal_doc_num"].apply(
-        lambda x: [p.strip() for p in str(x).split(",") if p.strip()]
-    )
+    merged_dates["proposal_doc_num_list"] = merged_dates["proposal_doc_num"].apply(lambda x: [p.strip() for p in str(x).split(",") if p.strip()])
     merged_dates["Date"] = pd.to_datetime(merged_dates["Date"], errors="coerce")
-    single_with_metadata["date"] = pd.to_datetime(
-        single_with_metadata["date"], errors="coerce"
-    )
+    single_with_metadata["date"] = pd.to_datetime(single_with_metadata["date"], errors="coerce")
     acceptance_dates = []
     for idx, row in single_with_metadata.iterrows():
         docnum = row["proposal_doc_num"]
@@ -164,17 +133,13 @@ def main():
         )
         return merged.loc[mask, "emoji_category"].unique().tolist()
 
-    single_with_metadata["emoji_categories_list"] = single_with_metadata[
-        "proposal_doc_num"
-    ].apply(get_emoji_categories)
+    single_with_metadata["emoji_categories_list"] = single_with_metadata["proposal_doc_num"].apply(get_emoji_categories)
 
     # Create binary column is_people_and_body if any category contains 'body'
     def has_body(categories):
         return any("body" in str(cat).lower() for cat in categories)
 
-    single_with_metadata["is_people_and_body"] = single_with_metadata[
-        "emoji_categories_list"
-    ].apply(has_body)
+    single_with_metadata["is_people_and_body"] = single_with_metadata["emoji_categories_list"].apply(has_body)
 
     # Add processing_time and nature columns
     EXCEPTION_LIMIT_DAYS = 1000  # Customize as needed
@@ -184,9 +149,7 @@ def main():
         proposal_date = row["date"]
         acceptance_date = row["acceptance_date"]
         if pd.notnull(proposal_date) and pd.notnull(acceptance_date):
-            days = (
-                pd.to_datetime(acceptance_date) - pd.to_datetime(proposal_date)
-            ).days
+            days = (pd.to_datetime(acceptance_date) - pd.to_datetime(proposal_date)).days
             single_with_metadata.at[idx, "processing_time"] = days
             if days <= 0 or days > EXCEPTION_LIMIT_DAYS:
                 single_with_metadata.at[idx, "nature"] = "exception"
