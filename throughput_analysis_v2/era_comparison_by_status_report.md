@@ -1,6 +1,6 @@
 # Era Comparison: Overall, Accepted, and Rejected Proposals (V2)
 
-*Generated on: 2025-08-24 13:14:53*
+*Generated on: 2025-08-24 13:50:35*
 
 ## All Proposals
 
