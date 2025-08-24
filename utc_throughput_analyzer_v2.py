@@ -118,8 +118,10 @@ class UTCThroughputAnalyzerV2:
                 )
                 for metric, data in comparison.items():
                     if metric != "overview":
-                        change = "✓ Improved" if data['improved'] else "✗ Not Improved"
-                        significant = "Yes" if data['statistically_significant'] else "No"
+                        change = "✓ Improved" if data["improved"] else "✗ Not Improved"
+                        significant = (
+                            "Yes" if data["statistically_significant"] else "No"
+                        )
                         f.write(
                             f"| {metric.replace('_', ' ').title()} | {data['pre_2017']['mean']:.2f} | {data['post_2017']['mean']:.2f} | {change} | {data['p_value']:.4f} | {significant} |\n"
                         )
@@ -251,6 +253,64 @@ class UTCThroughputAnalyzerV2:
             else:
                 metrics["max_dormancy_days"] = 0
 
+        # Reference temporal distribution analysis
+        if (
+            not timeline.empty
+            and "date" in timeline.columns
+            and len(timeline_dates) >= 2
+        ):
+            # Calculate relative positions of references in the timeline (0 = start, 1 = end)
+            total_duration = (timeline_dates.iloc[-1] - timeline_dates.iloc[0]).days
+            if total_duration > 0:
+                relative_positions = []
+                for date in timeline_dates:
+                    relative_pos = (date - timeline_dates.iloc[0]).days / total_duration
+                    relative_positions.append(relative_pos)
+
+                # Calculate distribution metrics
+                mean_position = sum(relative_positions) / len(relative_positions)
+
+                # Weighted density: count references in early (0-0.33), middle (0.33-0.67), late (0.67-1.0) periods
+                early_refs = sum(1 for pos in relative_positions if pos <= 0.33)
+                middle_refs = sum(1 for pos in relative_positions if 0.33 < pos <= 0.67)
+                late_refs = sum(1 for pos in relative_positions if pos > 0.67)
+
+                total_refs = len(relative_positions)
+                metrics["ref_distribution_early_pct"] = (
+                    (early_refs / total_refs * 100) if total_refs > 0 else 0
+                )
+                metrics["ref_distribution_middle_pct"] = (
+                    (middle_refs / total_refs * 100) if total_refs > 0 else 0
+                )
+                metrics["ref_distribution_late_pct"] = (
+                    (late_refs / total_refs * 100) if total_refs > 0 else 0
+                )
+                metrics["ref_distribution_mean_position"] = (
+                    mean_position  # 0-1 scale, <0.5 = head-heavy, >0.5 = tail-heavy
+                )
+
+                # Classification: head-heavy (>50% in first third), tail-heavy (>50% in last third), or balanced
+                if early_refs / total_refs > 0.5:
+                    metrics["ref_distribution_pattern"] = "head_heavy"
+                elif late_refs / total_refs > 0.5:
+                    metrics["ref_distribution_pattern"] = "tail_heavy"
+                else:
+                    metrics["ref_distribution_pattern"] = "balanced"
+            else:
+                # Single day or no duration
+                metrics["ref_distribution_early_pct"] = 100.0
+                metrics["ref_distribution_middle_pct"] = 0.0
+                metrics["ref_distribution_late_pct"] = 0.0
+                metrics["ref_distribution_mean_position"] = 0.0
+                metrics["ref_distribution_pattern"] = "single_day"
+        else:
+            # Not enough references for analysis
+            metrics["ref_distribution_early_pct"] = 0.0
+            metrics["ref_distribution_middle_pct"] = 0.0
+            metrics["ref_distribution_late_pct"] = 0.0
+            metrics["ref_distribution_mean_position"] = 0.0
+            metrics["ref_distribution_pattern"] = "insufficient_data"
+
         # People and entity metrics
         context = analyze_proposal_context(timeline)
         metrics["unique_people"] = len(context["people_involved"])
@@ -360,6 +420,9 @@ class UTCThroughputAnalyzerV2:
             "max_dormancy_days",
             "unique_people",
             "unique_entities",
+            "ref_distribution_mean_position",
+            "ref_distribution_early_pct",
+            "ref_distribution_late_pct",
         ]
 
         for metric in numeric_metrics:
@@ -446,8 +509,12 @@ class UTCThroughputAnalyzerV2:
             )
             for metric, data in status_comparison.items():
                 if metric != "overview":
-                    direction = "Accepted Lower" if data['accepted']['mean'] < data['rejected']['mean'] else "Rejected Lower"
-                    significant = "Yes" if data['statistically_significant'] else "No"
+                    direction = (
+                        "Accepted Lower"
+                        if data["accepted"]["mean"] < data["rejected"]["mean"]
+                        else "Rejected Lower"
+                    )
+                    significant = "Yes" if data["statistically_significant"] else "No"
                     f.write(
                         f"| {metric.replace('_', ' ').title()} | {data['accepted']['mean']:.2f} | {data['rejected']['mean']:.2f} | {direction} | {data['p_value']:.4f} | {significant} |\n"
                     )
@@ -479,6 +546,9 @@ class UTCThroughputAnalyzerV2:
             "max_dormancy_days",
             "unique_people",
             "unique_entities",
+            "ref_distribution_mean_position",
+            "ref_distribution_early_pct",
+            "ref_distribution_late_pct",
         ]
 
         for metric in numeric_metrics:
@@ -516,7 +586,17 @@ class UTCThroughputAnalyzerV2:
             "processing_days",
             "max_dormancy_days",
         ]  # Lower is better
-        if metric in improvement_metrics:
+
+        # For reference distribution metrics, we need different logic
+        if metric == "ref_distribution_mean_position":
+            # Mean position closer to 0.5 (balanced) is better - but this is subjective
+            # We'll consider more balanced (closer to 0.5) as improved
+            return abs(post_value - 0.5) < abs(pre_value - 0.5)
+        elif metric in ["ref_distribution_early_pct", "ref_distribution_late_pct"]:
+            # For distribution percentages, we can't easily define "improved"
+            # We'll just report if they changed significantly
+            return abs(post_value - pre_value) > 5  # >5% change threshold
+        elif metric in improvement_metrics:
             return post_value < pre_value
         else:
             return post_value > pre_value
@@ -566,7 +646,51 @@ class UTCThroughputAnalyzerV2:
         )
         plt.close()
 
-        # 2. Timeline of proposal submissions
+        # 2. Reference Distribution Analysis
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+        # Mean position comparison
+        metrics_df.boxplot(
+            column="ref_distribution_mean_position", by="era", ax=axes[0, 0]
+        )
+        axes[0, 0].set_title("Reference Distribution Mean Position by Era (V2)")
+        axes[0, 0].set_ylabel("Mean Position (0=early, 1=late)")
+        axes[0, 0].set_xlabel("Era")
+
+        # Early percentage comparison
+        metrics_df.boxplot(column="ref_distribution_early_pct", by="era", ax=axes[0, 1])
+        axes[0, 1].set_title("Early References Percentage by Era (V2)")
+        axes[0, 1].set_ylabel("Early References (%)")
+        axes[0, 1].set_xlabel("Era")
+
+        # Late percentage comparison
+        metrics_df.boxplot(column="ref_distribution_late_pct", by="era", ax=axes[1, 0])
+        axes[1, 0].set_title("Late References Percentage by Era (V2)")
+        axes[1, 0].set_ylabel("Late References (%)")
+        axes[1, 0].set_xlabel("Era")
+
+        # Distribution pattern counts
+        pattern_counts = (
+            metrics_df.groupby(["era", "ref_distribution_pattern"])
+            .size()
+            .unstack(fill_value=0)
+        )
+        pattern_counts.plot(kind="bar", ax=axes[1, 1], alpha=0.8)
+        axes[1, 1].set_title("Reference Distribution Patterns by Era (V2)")
+        axes[1, 1].set_ylabel("Number of Proposals")
+        axes[1, 1].set_xlabel("Era")
+        axes[1, 1].legend(title="Pattern")
+        axes[1, 1].tick_params(axis="x", rotation=0)
+
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(output_dir, "reference_distribution_analysis.png"),
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+        # 3. Timeline of proposal submissions
         plt.figure(figsize=(14, 8))
 
         # Group by year and era
@@ -606,19 +730,20 @@ class UTCThroughputAnalyzerV2:
         yearly_analysis = {}
 
         # Overall yearly counts
-        yearly_counts = metrics_df.groupby([
-            metrics_df["first_date"].dt.year,
-            "status"
-        ]).size().unstack(fill_value=0)
+        yearly_counts = (
+            metrics_df.groupby([metrics_df["first_date"].dt.year, "status"])
+            .size()
+            .unstack(fill_value=0)
+        )
 
         yearly_analysis["yearly_counts_by_status"] = yearly_counts
 
         # Yearly counts by era
-        yearly_era_counts = metrics_df.groupby([
-            metrics_df["first_date"].dt.year,
-            "era",
-            "status"
-        ]).size().unstack(fill_value=0)
+        yearly_era_counts = (
+            metrics_df.groupby([metrics_df["first_date"].dt.year, "era", "status"])
+            .size()
+            .unstack(fill_value=0)
+        )
 
         yearly_analysis["yearly_counts_by_era_status"] = yearly_era_counts
 
@@ -629,12 +754,18 @@ class UTCThroughputAnalyzerV2:
         metrics_df["year_month"] = metrics_df["first_date"].dt.to_period("M")
 
         # Monthly counts by status
-        monthly_counts = metrics_df.groupby(["year_month", "status"]).size().unstack(fill_value=0)
+        monthly_counts = (
+            metrics_df.groupby(["year_month", "status"]).size().unstack(fill_value=0)
+        )
         monthly_analysis["monthly_counts_by_status"] = monthly_counts
 
         # Calculate monthly rates by era
-        pre_2017_months = metrics_df[metrics_df["era"] == "pre_2017"]["year_month"].nunique()
-        post_2017_months = metrics_df[metrics_df["era"] == "post_2017"]["year_month"].nunique()
+        pre_2017_months = metrics_df[metrics_df["era"] == "pre_2017"][
+            "year_month"
+        ].nunique()
+        post_2017_months = metrics_df[metrics_df["era"] == "post_2017"][
+            "year_month"
+        ].nunique()
 
         pre_2017_proposals = len(metrics_df[metrics_df["era"] == "pre_2017"])
         post_2017_proposals = len(metrics_df[metrics_df["era"] == "post_2017"])
@@ -643,13 +774,19 @@ class UTCThroughputAnalyzerV2:
             "pre_2017": {
                 "total_months": pre_2017_months,
                 "total_proposals": pre_2017_proposals,
-                "proposals_per_month": pre_2017_proposals / pre_2017_months if pre_2017_months > 0 else 0
+                "proposals_per_month": (
+                    pre_2017_proposals / pre_2017_months if pre_2017_months > 0 else 0
+                ),
             },
             "post_2017": {
                 "total_months": post_2017_months,
                 "total_proposals": post_2017_proposals,
-                "proposals_per_month": post_2017_proposals / post_2017_months if post_2017_months > 0 else 0
-            }
+                "proposals_per_month": (
+                    post_2017_proposals / post_2017_months
+                    if post_2017_months > 0
+                    else 0
+                ),
+            },
         }
 
         # Monthly rates by status and era
@@ -659,7 +796,9 @@ class UTCThroughputAnalyzerV2:
 
             for status in ["accepted", "rejected"]:
                 status_count = len(era_data[era_data["status"] == status])
-                monthly_analysis["rates"][era][f"{status}_per_month"] = status_count / era_months if era_months > 0 else 0
+                monthly_analysis["rates"][era][f"{status}_per_month"] = (
+                    status_count / era_months if era_months > 0 else 0
+                )
 
         # 3. Composition analysis (acceptance rates by era)
         composition_analysis = {}
@@ -675,13 +814,13 @@ class UTCThroughputAnalyzerV2:
                 "accepted": accepted,
                 "rejected": rejected,
                 "acceptance_rate": (accepted / total * 100) if total > 0 else 0,
-                "rejection_rate": (rejected / total * 100) if total > 0 else 0
+                "rejection_rate": (rejected / total * 100) if total > 0 else 0,
             }
 
         return {
             "yearly": yearly_analysis,
             "monthly": monthly_analysis,
-            "composition": composition_analysis
+            "composition": composition_analysis,
         }
 
     def create_volume_visualizations(self, metrics_df, volume_patterns, output_dir):
@@ -692,8 +831,17 @@ class UTCThroughputAnalyzerV2:
         plt.figure(figsize=(14, 8))
         yearly_counts = volume_patterns["yearly"]["yearly_counts_by_status"]
         yearly_counts.plot(kind="bar", stacked=True, alpha=0.8, figsize=(14, 8))
-        plt.axvline(x=yearly_counts.index.get_loc(2017) if 2017 in yearly_counts.index else len(yearly_counts)//2,
-                   color="red", linestyle="--", alpha=0.7, label="2017 Process Change")
+        plt.axvline(
+            x=(
+                yearly_counts.index.get_loc(2017)
+                if 2017 in yearly_counts.index
+                else len(yearly_counts) // 2
+            ),
+            color="red",
+            linestyle="--",
+            alpha=0.7,
+            label="2017 Process Change",
+        )
         plt.title("Annual Proposal Volumes by Status (V2)")
         plt.xlabel("Year")
         plt.ylabel("Number of Proposals")
@@ -720,9 +868,17 @@ class UTCThroughputAnalyzerV2:
         x = range(len(eras))
         width = 0.25
 
-        ax1.bar([i - width for i in x], proposals_per_month, width, label="Total", alpha=0.8)
+        ax1.bar(
+            [i - width for i in x], proposals_per_month, width, label="Total", alpha=0.8
+        )
         ax1.bar(x, accepted_per_month, width, label="Accepted", alpha=0.8)
-        ax1.bar([i + width for i in x], rejected_per_month, width, label="Rejected", alpha=0.8)
+        ax1.bar(
+            [i + width for i in x],
+            rejected_per_month,
+            width,
+            label="Rejected",
+            alpha=0.8,
+        )
 
         ax1.set_xlabel("Era")
         ax1.set_ylabel("Proposals per Month")
@@ -736,8 +892,23 @@ class UTCThroughputAnalyzerV2:
         acceptance_rates = [composition[era]["acceptance_rate"] for era in eras]
         rejection_rates = [composition[era]["rejection_rate"] for era in eras]
 
-        ax2.bar(x, acceptance_rates, width*2, label="Acceptance Rate", alpha=0.8, color="green")
-        ax2.bar(x, rejection_rates, width*2, bottom=acceptance_rates, label="Rejection Rate", alpha=0.8, color="red")
+        ax2.bar(
+            x,
+            acceptance_rates,
+            width * 2,
+            label="Acceptance Rate",
+            alpha=0.8,
+            color="green",
+        )
+        ax2.bar(
+            x,
+            rejection_rates,
+            width * 2,
+            bottom=acceptance_rates,
+            label="Rejection Rate",
+            alpha=0.8,
+            color="red",
+        )
 
         ax2.set_xlabel("Era")
         ax2.set_ylabel("Percentage")
@@ -793,13 +964,19 @@ class UTCThroughputAnalyzerV2:
 
             # Volume Analysis Section
             f.write("## Proposal Volume Context\n\n")
-            f.write("Understanding proposal volumes is crucial for interpreting efficiency metrics, as changes in processing efficiency might be influenced by changes in proposal volume or composition over time.\n\n")
+            f.write(
+                "Understanding proposal volumes is crucial for interpreting efficiency metrics, as changes in processing efficiency might be influenced by changes in proposal volume or composition over time.\n\n"
+            )
 
             # Monthly rates table
             rates = volume_patterns["monthly"]["rates"]
             f.write("### Monthly Proposal Rates\n\n")
-            f.write("| Era | Total Proposals/Month | Accepted/Month | Rejected/Month | Active Months |\n")
-            f.write("|-----|---------------------|----------------|----------------|---------------|\n")
+            f.write(
+                "| Era | Total Proposals/Month | Accepted/Month | Rejected/Month | Active Months |\n"
+            )
+            f.write(
+                "|-----|---------------------|----------------|----------------|---------------|\n"
+            )
             for era in ["pre_2017", "post_2017"]:
                 era_label = "Pre-2017" if era == "pre_2017" else "Post-2017"
                 f.write(f"| {era_label} | {rates[era]['proposals_per_month']:.2f} | ")
@@ -811,8 +988,12 @@ class UTCThroughputAnalyzerV2:
             # Composition analysis table
             composition = volume_patterns["composition"]
             f.write("### Proposal Outcome Composition\n\n")
-            f.write("| Era | Total Proposals | Accepted | Rejected | Acceptance Rate | Rejection Rate |\n")
-            f.write("|-----|----------------|----------|----------|-----------------|----------------|\n")
+            f.write(
+                "| Era | Total Proposals | Accepted | Rejected | Acceptance Rate | Rejection Rate |\n"
+            )
+            f.write(
+                "|-----|----------------|----------|----------|-----------------|----------------|\n"
+            )
             for era in ["pre_2017", "post_2017"]:
                 era_label = "Pre-2017" if era == "pre_2017" else "Post-2017"
                 comp = composition[era]
@@ -825,22 +1006,54 @@ class UTCThroughputAnalyzerV2:
             yearly_counts = volume_patterns["yearly"]["yearly_counts_by_status"]
             f.write("### Annual Proposal Volumes (Top 10 Years)\n\n")
             if not yearly_counts.empty:
-                yearly_totals = yearly_counts.sum(axis=1).sort_values(ascending=False).head(10)
+                yearly_totals = (
+                    yearly_counts.sum(axis=1).sort_values(ascending=False).head(10)
+                )
                 f.write("| Year | Total | Accepted | Rejected |\n")
                 f.write("|------|-------|----------|----------|\n")
                 for year in yearly_totals.index:
-                    accepted = yearly_counts.loc[year, 'accepted'] if 'accepted' in yearly_counts.columns else 0
-                    rejected = yearly_counts.loc[year, 'rejected'] if 'rejected' in yearly_counts.columns else 0
-                    f.write(f"| {year} | {yearly_totals[year]} | {accepted} | {rejected} |\n")
+                    accepted = (
+                        yearly_counts.loc[year, "accepted"]
+                        if "accepted" in yearly_counts.columns
+                        else 0
+                    )
+                    rejected = (
+                        yearly_counts.loc[year, "rejected"]
+                        if "rejected" in yearly_counts.columns
+                        else 0
+                    )
+                    f.write(
+                        f"| {year} | {yearly_totals[year]} | {accepted} | {rejected} |\n"
+                    )
                 f.write("\n")
 
             f.write("**Key Volume Insights:**\n")
-            rate_change = ((rates["post_2017"]["proposals_per_month"] - rates["pre_2017"]["proposals_per_month"]) / rates["pre_2017"]["proposals_per_month"] * 100) if rates["pre_2017"]["proposals_per_month"] > 0 else 0
-            acceptance_change = composition["post_2017"]["acceptance_rate"] - composition["pre_2017"]["acceptance_rate"]
+            rate_change = (
+                (
+                    (
+                        rates["post_2017"]["proposals_per_month"]
+                        - rates["pre_2017"]["proposals_per_month"]
+                    )
+                    / rates["pre_2017"]["proposals_per_month"]
+                    * 100
+                )
+                if rates["pre_2017"]["proposals_per_month"] > 0
+                else 0
+            )
+            acceptance_change = (
+                composition["post_2017"]["acceptance_rate"]
+                - composition["pre_2017"]["acceptance_rate"]
+            )
 
-            f.write(f"- Monthly proposal rate {'increased' if rate_change > 0 else 'decreased'} by {abs(rate_change):.1f}% post-2017\n")
-            f.write(f"- Acceptance rate {'increased' if acceptance_change > 0 else 'decreased'} by {abs(acceptance_change):.1f} percentage points post-2017\n")
-            f.write("- This context is important when interpreting processing efficiency metrics below\n\n")
+            f.write(
+                f"- Monthly proposal rate {'increased' if rate_change > 0 else 'decreased'} by {abs(rate_change):.1f}% post-2017\n"
+            )
+            f.write(
+                f"- Acceptance rate {'increased' if acceptance_change > 0 else 'decreased'} by {abs(acceptance_change):.1f} percentage points post-2017\n"
+            )
+            f.write(
+                "- This context is important when interpreting processing efficiency metrics below\n\n"
+            )
 
             f.write("## Processing Efficiency Metrics\n\n")
             f.write(
@@ -851,12 +1064,90 @@ class UTCThroughputAnalyzerV2:
             )
             for metric, data in comparison_results.items():
                 if metric != "overview":
-                    change = "✓ Yes" if data['improved'] else "✗ No"
-                    significant = "✓ Yes" if data['statistically_significant'] else "✗ No"
+                    change = "✓ Yes" if data["improved"] else "✗ No"
+                    significant = (
+                        "✓ Yes" if data["statistically_significant"] else "✗ No"
+                    )
                     f.write(
                         f"| {metric.replace('_', ' ').title()} | {data['pre_2017']['mean']:.2f} ± {data['pre_2017']['std']:.2f} | {data['post_2017']['mean']:.2f} ± {data['post_2017']['std']:.2f} | {change} | {data['p_value']:.4f} | {significant} |\n"
                     )
             f.write("\n")
+
+            # Add reference distribution analysis section
+            f.write("## Reference Distribution Patterns\n\n")
+            f.write(
+                "Analysis of temporal engagement patterns shows when during a proposal's lifecycle references occur:\n\n"
+            )
+
+            # Calculate distribution pattern summary
+            distribution_summary = (
+                metrics_df.groupby(["era", "ref_distribution_pattern"])
+                .size()
+                .unstack(fill_value=0)
+            )
+            if not distribution_summary.empty:
+                f.write("### Distribution Pattern Counts by Era\n\n")
+                f.write(
+                    "| Era | Head Heavy | Tail Heavy | Balanced | Single Day | Insufficient Data |\n"
+                )
+                f.write(
+                    "|-----|------------|------------|----------|------------|------------------|\n"
+                )
+                for era in ["pre_2017", "post_2017"]:
+                    era_label = "Pre-2017" if era == "pre_2017" else "Post-2017"
+                    if era in distribution_summary.index:
+                        row = distribution_summary.loc[era]
+                        f.write(
+                            f"| {era_label} | {row.get('head_heavy', 0)} | {row.get('tail_heavy', 0)} | "
+                        )
+                        f.write(
+                            f"{row.get('balanced', 0)} | {row.get('single_day', 0)} | {row.get('insufficient_data', 0)} |\n"
+                        )
+                    else:
+                        f.write(f"| {era_label} | 0 | 0 | 0 | 0 | 0 |\n")
+                f.write("\n")
+
+            # Distribution percentages summary
+            if "ref_distribution_mean_position" in comparison_results:
+                ref_pos_data = comparison_results["ref_distribution_mean_position"]
+                f.write("### Key Reference Distribution Insights\n\n")
+                f.write(
+                    f"- **Mean reference position (0=early, 1=late):** Pre-2017: {ref_pos_data['pre_2017']['mean']:.3f}, Post-2017: {ref_pos_data['post_2017']['mean']:.3f}\n"
+                )
+
+                if "ref_distribution_early_pct" in comparison_results:
+                    early_data = comparison_results["ref_distribution_early_pct"]
+                    f.write(
+                        f"- **Early references (first third):** Pre-2017: {early_data['pre_2017']['mean']:.1f}%, Post-2017: {early_data['post_2017']['mean']:.1f}%\n"
+                    )
+
+                if "ref_distribution_late_pct" in comparison_results:
+                    late_data = comparison_results["ref_distribution_late_pct"]
+                    f.write(
+                        f"- **Late references (last third):** Pre-2017: {late_data['pre_2017']['mean']:.1f}%, Post-2017: {late_data['post_2017']['mean']:.1f}%\n"
+                    )
+
+                f.write("\n")
+                f.write("**Interpretation:**\n")
+                if (
+                    ref_pos_data["pre_2017"]["mean"] < 0.5
+                    and ref_pos_data["post_2017"]["mean"] < 0.5
+                ):
+                    f.write(
+                        "- Both eras show head-heavy reference patterns (more activity early in proposal lifecycle)\n"
+                    )
+                elif (
+                    ref_pos_data["pre_2017"]["mean"] > 0.5
+                    and ref_pos_data["post_2017"]["mean"] > 0.5
+                ):
+                    f.write(
+                        "- Both eras show tail-heavy reference patterns (more activity late in proposal lifecycle)\n"
+                    )
+                else:
+                    f.write("- Reference patterns shifted between eras\n")
+                f.write(
+                    "- See reference distribution visualizations for detailed patterns\n\n"
+                )
 
             f.write("## Methodology\n\n")
             f.write("- **Statistical tests:** Mann-Whitney U (non-parametric)\n")
@@ -865,15 +1156,28 @@ class UTCThroughputAnalyzerV2:
                 "- **Improvement definition:** Lower processing time and dormancy = better; Higher engagement metrics = better\n"
             )
             f.write(
+                "- **Reference distribution:** Timeline divided into thirds (early: 0-33%, middle: 33-67%, late: 67-100%)\n"
+            )
+            f.write(
                 "- **Era classification:** Based on proposal submission date vs 2017-01-01\n"
             )
-            f.write("- **Volume normalization:** Raw metrics shown; volume context provided for interpretation\n\n")
+            f.write(
+                "- **Volume normalization:** Raw metrics shown; volume context provided for interpretation\n\n"
+            )
 
             f.write("## Interpretation Notes\n\n")
-            f.write("- **Volume effects:** Changes in efficiency metrics should be interpreted alongside volume changes\n")
-            f.write("- **Composition effects:** Changes in acceptance rates may influence perceived processing efficiency\n")
-            f.write("- **Temporal effects:** Longer time series in pre-2017 era may affect metric distributions\n")
-            f.write("- **Process maturity:** Post-2017 improvements may reflect both procedural changes and institutional learning\n\n")
+            f.write(
+                "- **Volume effects:** Changes in efficiency metrics should be interpreted alongside volume changes\n"
+            )
+            f.write(
+                "- **Composition effects:** Changes in acceptance rates may influence perceived processing efficiency\n"
+            )
+            f.write(
+                "- **Temporal effects:** Longer time series in pre-2017 era may affect metric distributions\n"
+            )
+            f.write(
+                "- **Process maturity:** Post-2017 improvements may reflect both procedural changes and institutional learning\n\n"
+            )
 
         print(f"Report generated: {report_path}")
         return report_path

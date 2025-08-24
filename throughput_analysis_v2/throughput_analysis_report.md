@@ -1,6 +1,6 @@
 # UTC Throughput Analysis Report (V2)
 
-*Generated on: 2025-08-24 13:50:35*
+*Generated on: 2025-08-24 15:21:15*
 
 ## Analysis Overview
 
@@ -65,12 +65,37 @@ Understanding proposal volumes is crucial for interpreting efficiency metrics, a
 | Max Dormancy Days | 68.73 ± 86.29 | 68.67 ± 94.90 | ✓ Yes | 0.0176 | ✓ Yes |
 | Unique People | 49.39 ± 25.00 | 28.15 ± 25.92 | ✗ No | 0.0000 | ✓ Yes |
 | Unique Entities | 16.34 ± 8.20 | 9.02 ± 5.19 | ✗ No | 0.0000 | ✓ Yes |
+| Ref Distribution Mean Position | 0.45 ± 0.11 | 0.47 ± 0.09 | ✓ Yes | 0.0058 | ✓ Yes |
+| Ref Distribution Early Pct | 51.76 ± 15.95 | 49.87 ± 13.54 | ✗ No | 0.1815 | ✗ No |
+| Ref Distribution Late Pct | 38.77 ± 17.55 | 43.69 ± 14.50 | ✗ No | 0.0015 | ✓ Yes |
+
+## Reference Distribution Patterns
+
+Analysis of temporal engagement patterns shows when during a proposal's lifecycle references occur:
+
+### Distribution Pattern Counts by Era
+
+| Era | Head Heavy | Tail Heavy | Balanced | Single Day | Insufficient Data |
+|-----|------------|------------|----------|------------|------------------|
+| Pre-2017 | 45 | 16 | 58 | 0 | 0 |
+| Post-2017 | 49 | 23 | 161 | 0 | 0 |
+
+### Key Reference Distribution Insights
+
+- **Mean reference position (0=early, 1=late):** Pre-2017: 0.452, Post-2017: 0.474
+- **Early references (first third):** Pre-2017: 51.8%, Post-2017: 49.9%
+- **Late references (last third):** Pre-2017: 38.8%, Post-2017: 43.7%
+
+**Interpretation:**
+- Both eras show head-heavy reference patterns (more activity early in proposal lifecycle)
+- See reference distribution visualizations for detailed patterns
 
 ## Methodology
 
 - **Statistical tests:** Mann-Whitney U (non-parametric)
 - **Significance threshold:** p < 0.05
 - **Improvement definition:** Lower processing time and dormancy = better; Higher engagement metrics = better
+- **Reference distribution:** Timeline divided into thirds (early: 0-33%, middle: 33-67%, late: 67-100%)
 - **Era classification:** Based on proposal submission date vs 2017-01-01
 - **Volume normalization:** Raw metrics shown; volume context provided for interpretation
 
