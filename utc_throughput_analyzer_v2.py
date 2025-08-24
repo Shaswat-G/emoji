@@ -595,10 +595,175 @@ class UTCThroughputAnalyzerV2:
 
         print(f"Visualizations saved to {output_dir}")
 
+    def analyze_proposal_volume_patterns(self, metrics_df):
+        """
+        Analyze proposal volume patterns by year and month for context
+        Returns dict with yearly counts, monthly rates, and composition analysis
+        """
+        print("Analyzing proposal volume patterns...")
+
+        # 1. Yearly proposal counts by status and era
+        yearly_analysis = {}
+
+        # Overall yearly counts
+        yearly_counts = metrics_df.groupby([
+            metrics_df["first_date"].dt.year,
+            "status"
+        ]).size().unstack(fill_value=0)
+
+        yearly_analysis["yearly_counts_by_status"] = yearly_counts
+
+        # Yearly counts by era
+        yearly_era_counts = metrics_df.groupby([
+            metrics_df["first_date"].dt.year,
+            "era",
+            "status"
+        ]).size().unstack(fill_value=0)
+
+        yearly_analysis["yearly_counts_by_era_status"] = yearly_era_counts
+
+        # 2. Monthly incoming rates
+        monthly_analysis = {}
+
+        # Create year-month column
+        metrics_df["year_month"] = metrics_df["first_date"].dt.to_period("M")
+
+        # Monthly counts by status
+        monthly_counts = metrics_df.groupby(["year_month", "status"]).size().unstack(fill_value=0)
+        monthly_analysis["monthly_counts_by_status"] = monthly_counts
+
+        # Calculate monthly rates by era
+        pre_2017_months = metrics_df[metrics_df["era"] == "pre_2017"]["year_month"].nunique()
+        post_2017_months = metrics_df[metrics_df["era"] == "post_2017"]["year_month"].nunique()
+
+        pre_2017_proposals = len(metrics_df[metrics_df["era"] == "pre_2017"])
+        post_2017_proposals = len(metrics_df[metrics_df["era"] == "post_2017"])
+
+        monthly_analysis["rates"] = {
+            "pre_2017": {
+                "total_months": pre_2017_months,
+                "total_proposals": pre_2017_proposals,
+                "proposals_per_month": pre_2017_proposals / pre_2017_months if pre_2017_months > 0 else 0
+            },
+            "post_2017": {
+                "total_months": post_2017_months,
+                "total_proposals": post_2017_proposals,
+                "proposals_per_month": post_2017_proposals / post_2017_months if post_2017_months > 0 else 0
+            }
+        }
+
+        # Monthly rates by status and era
+        for era in ["pre_2017", "post_2017"]:
+            era_data = metrics_df[metrics_df["era"] == era]
+            era_months = era_data["year_month"].nunique()
+
+            for status in ["accepted", "rejected"]:
+                status_count = len(era_data[era_data["status"] == status])
+                monthly_analysis["rates"][era][f"{status}_per_month"] = status_count / era_months if era_months > 0 else 0
+
+        # 3. Composition analysis (acceptance rates by era)
+        composition_analysis = {}
+
+        for era in ["pre_2017", "post_2017"]:
+            era_data = metrics_df[metrics_df["era"] == era]
+            total = len(era_data)
+            accepted = len(era_data[era_data["status"] == "accepted"])
+            rejected = len(era_data[era_data["status"] == "rejected"])
+
+            composition_analysis[era] = {
+                "total": total,
+                "accepted": accepted,
+                "rejected": rejected,
+                "acceptance_rate": (accepted / total * 100) if total > 0 else 0,
+                "rejection_rate": (rejected / total * 100) if total > 0 else 0
+            }
+
+        return {
+            "yearly": yearly_analysis,
+            "monthly": monthly_analysis,
+            "composition": composition_analysis
+        }
+
+    def create_volume_visualizations(self, metrics_df, volume_patterns, output_dir):
+        """
+        Create visualizations for proposal volume patterns
+        """
+        # 1. Yearly proposal counts stacked by status
+        plt.figure(figsize=(14, 8))
+        yearly_counts = volume_patterns["yearly"]["yearly_counts_by_status"]
+        yearly_counts.plot(kind="bar", stacked=True, alpha=0.8, figsize=(14, 8))
+        plt.axvline(x=yearly_counts.index.get_loc(2017) if 2017 in yearly_counts.index else len(yearly_counts)//2,
+                   color="red", linestyle="--", alpha=0.7, label="2017 Process Change")
+        plt.title("Annual Proposal Volumes by Status (V2)")
+        plt.xlabel("Year")
+        plt.ylabel("Number of Proposals")
+        plt.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(output_dir, "annual_proposal_volumes.png"),
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+        # 2. Monthly proposal rates comparison
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+        # Monthly rates by era
+        rates = volume_patterns["monthly"]["rates"]
+        eras = ["pre_2017", "post_2017"]
+        proposals_per_month = [rates[era]["proposals_per_month"] for era in eras]
+        accepted_per_month = [rates[era]["accepted_per_month"] for era in eras]
+        rejected_per_month = [rates[era]["rejected_per_month"] for era in eras]
+
+        x = range(len(eras))
+        width = 0.25
+
+        ax1.bar([i - width for i in x], proposals_per_month, width, label="Total", alpha=0.8)
+        ax1.bar(x, accepted_per_month, width, label="Accepted", alpha=0.8)
+        ax1.bar([i + width for i in x], rejected_per_month, width, label="Rejected", alpha=0.8)
+
+        ax1.set_xlabel("Era")
+        ax1.set_ylabel("Proposals per Month")
+        ax1.set_title("Monthly Proposal Rates by Era (V2)")
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(["Pre-2017", "Post-2017"])
+        ax1.legend()
+
+        # Acceptance rates by era
+        composition = volume_patterns["composition"]
+        acceptance_rates = [composition[era]["acceptance_rate"] for era in eras]
+        rejection_rates = [composition[era]["rejection_rate"] for era in eras]
+
+        ax2.bar(x, acceptance_rates, width*2, label="Acceptance Rate", alpha=0.8, color="green")
+        ax2.bar(x, rejection_rates, width*2, bottom=acceptance_rates, label="Rejection Rate", alpha=0.8, color="red")
+
+        ax2.set_xlabel("Era")
+        ax2.set_ylabel("Percentage")
+        ax2.set_title("Proposal Outcome Composition by Era (V2)")
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(["Pre-2017", "Post-2017"])
+        ax2.legend()
+        ax2.set_ylim(0, 100)
+
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(output_dir, "proposal_volume_analysis.png"),
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+        print(f"Volume analysis visualizations saved to {output_dir}")
+
     def generate_report(self, metrics_df, comparison_results, output_dir):
         """
-        Generate comprehensive Markdown report
+        Generate comprehensive Markdown report including volume analysis
         """
+        # First analyze volume patterns
+        volume_patterns = self.analyze_proposal_volume_patterns(metrics_df)
+
         report_path = os.path.join(output_dir, "throughput_analysis_report.md")
 
         with open(report_path, "w", encoding="utf-8") as f:
@@ -626,31 +791,89 @@ class UTCThroughputAnalyzerV2:
             f.write(f"- Post-2017: {overview['post_2017_count']} proposals\n")
             f.write(f"- Total: {overview['total_proposals']} proposals\n\n")
 
-            f.write("## Key Findings\n\n")
+            # Volume Analysis Section
+            f.write("## Proposal Volume Context\n\n")
+            f.write("Understanding proposal volumes is crucial for interpreting efficiency metrics, as changes in processing efficiency might be influenced by changes in proposal volume or composition over time.\n\n")
+
+            # Monthly rates table
+            rates = volume_patterns["monthly"]["rates"]
+            f.write("### Monthly Proposal Rates\n\n")
+            f.write("| Era | Total Proposals/Month | Accepted/Month | Rejected/Month | Active Months |\n")
+            f.write("|-----|---------------------|----------------|----------------|---------------|\n")
+            for era in ["pre_2017", "post_2017"]:
+                era_label = "Pre-2017" if era == "pre_2017" else "Post-2017"
+                f.write(f"| {era_label} | {rates[era]['proposals_per_month']:.2f} | ")
+                f.write(f"{rates[era]['accepted_per_month']:.2f} | ")
+                f.write(f"{rates[era]['rejected_per_month']:.2f} | ")
+                f.write(f"{rates[era]['total_months']} |\n")
+            f.write("\n")
+
+            # Composition analysis table
+            composition = volume_patterns["composition"]
+            f.write("### Proposal Outcome Composition\n\n")
+            f.write("| Era | Total Proposals | Accepted | Rejected | Acceptance Rate | Rejection Rate |\n")
+            f.write("|-----|----------------|----------|----------|-----------------|----------------|\n")
+            for era in ["pre_2017", "post_2017"]:
+                era_label = "Pre-2017" if era == "pre_2017" else "Post-2017"
+                comp = composition[era]
+                f.write(f"| {era_label} | {comp['total']} | {comp['accepted']} | ")
+                f.write(f"{comp['rejected']} | {comp['acceptance_rate']:.1f}% | ")
+                f.write(f"{comp['rejection_rate']:.1f}% |\n")
+            f.write("\n")
+
+            # Yearly counts summary
+            yearly_counts = volume_patterns["yearly"]["yearly_counts_by_status"]
+            f.write("### Annual Proposal Volumes (Top 10 Years)\n\n")
+            if not yearly_counts.empty:
+                yearly_totals = yearly_counts.sum(axis=1).sort_values(ascending=False).head(10)
+                f.write("| Year | Total | Accepted | Rejected |\n")
+                f.write("|------|-------|----------|----------|\n")
+                for year in yearly_totals.index:
+                    accepted = yearly_counts.loc[year, 'accepted'] if 'accepted' in yearly_counts.columns else 0
+                    rejected = yearly_counts.loc[year, 'rejected'] if 'rejected' in yearly_counts.columns else 0
+                    f.write(f"| {year} | {yearly_totals[year]} | {accepted} | {rejected} |\n")
+                f.write("\n")
+
+            f.write("**Key Volume Insights:**\n")
+            rate_change = ((rates["post_2017"]["proposals_per_month"] - rates["pre_2017"]["proposals_per_month"]) / rates["pre_2017"]["proposals_per_month"] * 100) if rates["pre_2017"]["proposals_per_month"] > 0 else 0
+            acceptance_change = composition["post_2017"]["acceptance_rate"] - composition["pre_2017"]["acceptance_rate"]
+
+            f.write(f"- Monthly proposal rate {'increased' if rate_change > 0 else 'decreased'} by {abs(rate_change):.1f}% post-2017\n")
+            f.write(f"- Acceptance rate {'increased' if acceptance_change > 0 else 'decreased'} by {abs(acceptance_change):.1f} percentage points post-2017\n")
+            f.write("- This context is important when interpreting processing efficiency metrics below\n\n")
+
+            f.write("## Processing Efficiency Metrics\n\n")
             f.write(
-                "| Metric | Pre-2017 Mean | Post-2017 Mean | Change | P-Value | Significant |\n"
+                "| Metric | Pre-2017 Mean ± SD | Post-2017 Mean ± SD | Improved | P-Value | Significant |\n"
             )
             f.write(
-                "|--------|---------------|----------------|---------|---------|-------------|\n"
+                "|--------|-------------------|---------------------|----------|---------|-------------|\n"
             )
             for metric, data in comparison_results.items():
                 if metric != "overview":
-                    change = "✓ Improved" if data['improved'] else "✗ Not Improved"
-                    significant = "Yes" if data['statistically_significant'] else "No"
+                    change = "✓ Yes" if data['improved'] else "✗ No"
+                    significant = "✓ Yes" if data['statistically_significant'] else "✗ No"
                     f.write(
-                        f"| {metric.replace('_', ' ').title()} | {data['pre_2017']['mean']:.2f} | {data['post_2017']['mean']:.2f} | {change} | {data['p_value']:.4f} | {significant} |\n"
+                        f"| {metric.replace('_', ' ').title()} | {data['pre_2017']['mean']:.2f} ± {data['pre_2017']['std']:.2f} | {data['post_2017']['mean']:.2f} ± {data['post_2017']['std']:.2f} | {change} | {data['p_value']:.4f} | {significant} |\n"
                     )
             f.write("\n")
 
             f.write("## Methodology\n\n")
-            f.write("- Statistical tests: Mann-Whitney U (non-parametric)\n")
-            f.write("- Significance threshold: p < 0.05\n")
+            f.write("- **Statistical tests:** Mann-Whitney U (non-parametric)\n")
+            f.write("- **Significance threshold:** p < 0.05\n")
             f.write(
-                "- Improvement definition: Lower processing time and dormancy = better\n"
+                "- **Improvement definition:** Lower processing time and dormancy = better; Higher engagement metrics = better\n"
             )
             f.write(
-                "- Era classification: Based on proposal submission date vs 2017-01-01\n\n"
+                "- **Era classification:** Based on proposal submission date vs 2017-01-01\n"
             )
+            f.write("- **Volume normalization:** Raw metrics shown; volume context provided for interpretation\n\n")
+
+            f.write("## Interpretation Notes\n\n")
+            f.write("- **Volume effects:** Changes in efficiency metrics should be interpreted alongside volume changes\n")
+            f.write("- **Composition effects:** Changes in acceptance rates may influence perceived processing efficiency\n")
+            f.write("- **Temporal effects:** Longer time series in pre-2017 era may affect metric distributions\n")
+            f.write("- **Process maturity:** Post-2017 improvements may reflect both procedural changes and institutional learning\n\n")
 
         print(f"Report generated: {report_path}")
         return report_path
@@ -686,12 +909,24 @@ class UTCThroughputAnalyzerV2:
         # Compare eras (pre/post 2017) for overall, accepted, rejected
         era_comparisons = self.compare_eras_by_status(metrics_df)
 
+        # Analyze volume patterns for context
+        volume_patterns = self.analyze_proposal_volume_patterns(metrics_df)
+
         # Generate visualizations and report for era analysis by status
         self.create_era_visualizations_by_status(
             metrics_df, era_comparisons, output_dir
         )
+
+        # Generate volume analysis visualizations
+        self.create_volume_visualizations(metrics_df, volume_patterns, output_dir)
+
         era_report_path = self.generate_era_report_by_status(
             era_comparisons, output_dir
+        )
+
+        # Generate main throughput analysis report (includes volume context)
+        main_report_path = self.generate_report(
+            metrics_df, era_comparisons["overall"], output_dir
         )
 
         # Save processed data
@@ -701,7 +936,8 @@ class UTCThroughputAnalyzerV2:
         print("\n✅ Analysis complete!")
         print(f"📊 Status Report: {status_report_path}")
         print(f"📊 Era Comparison Report: {era_report_path}")
-        print(f"📈 Visualizations: {output_dir}")
+        print(f"� Main Throughput Report (with volume context): {main_report_path}")
+        print(f"�📈 Visualizations: {output_dir}")
         print(f"📋 Data: {data_path}")
 
         return {
