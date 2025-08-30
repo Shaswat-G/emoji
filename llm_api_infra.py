@@ -1,3 +1,18 @@
+# -----------------------------------------------------------------------------
+# Script: llm_api_infra.py
+# Summary: Minimal OpenAI client wrapper and helpers used by other scripts for
+#          calling an LLM with a configuration-driven prompt, parsing outputs
+#          and estimating token-based cost. This file centralizes basic API
+#          usage patterns so other pipeline scripts can focus on data handling.
+# Inputs:  config.yml (or other YAML), API key file path referenced in config,
+#          prompt templates and input files
+# Outputs: Returns raw LLM content, token usage, and estimated cost to caller
+# Context: Designed as a lightweight infra helper to avoid duplicating API call
+#          boilerplate across pipeline scripts; not a full-featured production
+#          client (no retries, no advanced error handling by default).
+# -----------------------------------------------------------------------------
+
+
 import json
 import yaml
 import os
@@ -14,10 +29,10 @@ def load_file(file_path, encoding='utf-8'):
 
 def call_api(api_key, config, prompt):
     client = OpenAI(api_key=api_key)
-    
+
     response_format = {"type": config["response_format"]} if config["response_format"] == "json_object" else None
     messages = [{"role": config["role"], "content": prompt}]
-    
+
     response = client.chat.completions.create(
         model=config["model"],
         temperature=config["temperature"],
@@ -28,7 +43,7 @@ def call_api(api_key, config, prompt):
         response_format=response_format,
         messages=messages
     )
-    
+
     is_json = config["response_format"] == "json_object"
     if is_json:
         try:
@@ -37,12 +52,12 @@ def call_api(api_key, config, prompt):
             content = response.choices[0].message.content.strip()
     else:
         content = response.choices[0].message.content.strip()
-    
+
     tokens = dict(response.usage)
     rates = {'gpt-4o-mini-2024-07-18': {"input": 15e-8, "output": 60e-8},}
     model_rates = rates.get(config["model"])
     cost = tokens['prompt_tokens'] * model_rates["input"] + tokens['completion_tokens'] * model_rates["output"]
-    
+
     return content, tokens, cost
 
 def main():
@@ -54,7 +69,7 @@ def main():
     api_key = load_file(config["api_key_path"]).strip()
     prompt_template = load_file(config["prompt_path"])
     input_text = load_file(config["input_path"])
-    
+
     prompt = prompt_template.format(input_text=input_text)
     content, tokens, cost = call_api(api_key, config, prompt)
 
@@ -63,9 +78,9 @@ def main():
         print(json.dumps(content, indent=2))
     else:
         print(content)
-    
+
     print(f"\n--- Token Usage: {tokens['total_tokens']} total | Cost: ${cost:.6f} ---")
-    
+
 
     output_path = config["output_path"]
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)

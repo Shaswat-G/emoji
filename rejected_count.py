@@ -1,14 +1,24 @@
-### This script scrapes a webpage containing rejected emoji proposals, processes the data, and exports it to a CSV file.
-# It handles rowspan attributes, extracts relevant information, and normalizes hyphens in the text
-# for consistency. The final output is saved as a CSV file named "rejected_proposals.csv".
-# Note: There are some rows in Charlotte's page that reference emojis which were accepted in a different form at a later time.
-# This script cannot handle those cases and they were included manually.
+# -----------------------------------------------------------------------------
+# Script: rejected_count.py
+# Purpose: Scrape and parse rejected emoji proposals from a specific webpage,
+#          handling table structures, categories, and text normalization.
+# Behavior: Fetches HTML from charlottebuff.com, parses table with BeautifulSoup,
+#           extracts categories, IDs, and proposal details, normalizes hyphens,
+#           and exports to CSV.
+# Inputs:  None (hardcoded URL: https://charlottebuff.com/unicode/misc/rejected-emoji-proposals/).
+# Outputs: rejected_proposals.csv with columns for category, ID, and proposal data.
+# Notes:   Handles rowspan attributes; manual inclusion for cases where emojis
+#          were later accepted in different forms.
+# Requires: requests, beautifulsoup4, pandas, re, os.
+# Updated: 2025-08-30
+# -----------------------------------------------------------------------------
 
 import os
+import re
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import re
 
 print("Current Working Directory ", os.getcwd())
 

@@ -1,3 +1,20 @@
+# -----------------------------------------------------------------------------
+# Script: mail_archive_scraper_new.py
+# Purpose: Scrape and parse Unicode mailing list archives (2014-2021) to extract
+#          email metadata, handling newer HTML formats with thread grouping,
+#          sanitization for Unicode issues, and incremental backups.
+# Behavior: Fetches archive pages via requests, parses with BeautifulSoup,
+#           extracts author, subject, thread, time, and msg_id, groups by thread,
+#           sanitizes text, and saves aggregated data to CSV with backups.
+# Inputs:  None (hardcoded URL pattern for corp.unicode.org/pipermail/unicode/).
+# Outputs: unicode_emails_2014_2021.csv and periodic backups in archives/ folder.
+# Notes:   Designed for batch scraping; handles request errors, encoding issues,
+#          and logs progress/errors to unicode_archive_extraction.log.
+# Requires: requests, beautifulsoup4, pandas, tqdm, unicodedata, calendar, re.
+# Updated: 2025-08-30
+# -----------------------------------------------------------------------------
+
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -35,11 +52,11 @@ def sanitize_text(text):
     """Clean text to avoid Unicode encoding issues"""
     if not text or not isinstance(text, str):
         return text
-        
+
     try:
         # Normalize Unicode (NFC form tends to work best)
         text = unicodedata.normalize('NFC', text)
-        
+
         # Remove or replace problematic characters
         # Replace surrogate pairs with replacement character
         text = text.encode('utf-8', errors='replace').decode('utf-8')
@@ -53,7 +70,7 @@ def parse_email_archive(html_content, year, month):
     # Use 'html.parser' instead of default parser for better compatibility
     soup = BeautifulSoup(html_content, 'html.parser', from_encoding='utf-8')
     emails_data = []
-    
+
     # Look for the message count text to identify the right section
     message_count_tag = soup.find(string=re.compile(r'Messages:\s+\d+'))
     if message_count_tag:
@@ -61,11 +78,11 @@ def parse_email_archive(html_content, year, month):
         count_match = re.search(r'Messages:\s+(\d+)', message_count_tag)
         total_messages = int(count_match.group(1)) if count_match else 0
         print(f"Expected message count from HTML: {total_messages}")
-    
+
     # Find ALL li elements that represent emails (direct approach)
     # These li elements have an <a> with href and a following <a> with name attribute
     all_lis = soup.find_all('li')
-    
+
     processed = 0
     for li in all_lis:
         # An email entry must have:
@@ -75,34 +92,34 @@ def parse_email_archive(html_content, year, month):
         href_anchor = li.find('a', href=True)
         if not href_anchor or href_anchor.find_parent('b'):
             continue
-        
+
         # Find the name anchor (for message ID)
         name_anchor = li.find('a', attrs={'name': True})
         if not name_anchor:
             continue
-            
+
         # Find the author tag
         author_tag = li.find('i')
         if not author_tag:
             continue
-            
+
         # This is an email entry
         subject = sanitize_text(href_anchor.get_text(strip=True))
         author = sanitize_text(author_tag.get_text(strip=True))
         msg_id = name_anchor['name']
-        
+
         # Extract timestamp
         time = extract_datetime_from_id(msg_id)
-        
+
         # Extract thread information from HTML comments
         # Comments like <!--0 01401599194.608- --> contain thread info
         thread = subject  # Default to subject
-        
+
         # Try to find the thread from comment
         prev = li.previous
         while prev and not (hasattr(prev, 'string') and prev.string and '<!--' in prev.string):
             prev = prev.previous
-            
+
         if prev and hasattr(prev, 'string'):
             # Comments like <!--0 01401599194.608- -->
             # The number after <!-- indicates thread depth
@@ -112,7 +129,7 @@ def parse_email_archive(html_content, year, month):
                 # Top-level emails (depth 0) start their own thread
                 if depth == 0:
                     thread = subject
-        
+
         # Add to our dataset with sanitized text
         emails_data.append({
             'year': year,
@@ -124,9 +141,9 @@ def parse_email_archive(html_content, year, month):
             'msg_id': msg_id
         })
         processed += 1
-    
+
     print(f"Found {processed} email records")
-    
+
     # Group emails into threads based on subject
     # Emails with the same subject are usually part of the same thread
     subject_to_thread = {}
@@ -134,12 +151,12 @@ def parse_email_archive(html_content, year, month):
         if email['subject'] not in subject_to_thread:
             subject_to_thread[email['subject']] = email['subject']
         emails_data[i]['thread'] = subject_to_thread[email['subject']]
-    
+
     # Create DataFrame and sort by time
     df = pd.DataFrame(emails_data)
     if not df.empty and 'time' in df.columns:
         df = df.sort_values('time')
-    
+
     return df
 
 def fetch_and_parse_archive(year, month):
@@ -147,15 +164,15 @@ def fetch_and_parse_archive(year, month):
     month_str = calendar.month_name[month]
     archive_identifier = f"{year}-{month_str}"
     logging.info(f"Processing archive: {archive_identifier}")
-    
+
     # Build the URL for this archive
     url = f"https://corp.unicode.org/pipermail/unicode/{archive_identifier}/thread.html"
-    
+
     try:
         # Try to fetch the archive
         response = requests.get(url, timeout=45)
         response.raise_for_status()  # Raise exception for 4XX/5XX status codes
-        
+
         # Parse the HTML and extract email data
         df = parse_email_archive(response.content, year, month)
         if not df.empty:
@@ -164,7 +181,7 @@ def fetch_and_parse_archive(year, month):
         else:
             logging.warning(f"No emails found in {archive_identifier}")
             return pd.DataFrame()
-            
+
     except RequestException as e:
         # Handle request errors (404, 500, connection issues, etc.)
         logging.error(f"Failed to fetch archive {archive_identifier}: {str(e)}")
@@ -178,7 +195,7 @@ def process_all_archives(start_year=2014, end_year=2021):
     """Process all archives between start_year and end_year"""
     all_emails = pd.DataFrame()
     total_archives = (end_year - start_year + 1) * 12
-    
+
     # Create a progress bar
     with tqdm(total=total_archives, desc="Processing archives") as pbar:
         for year in range(start_year, end_year + 1):
@@ -187,15 +204,15 @@ def process_all_archives(start_year=2014, end_year=2021):
                 if year == datetime.now().year and month > datetime.now().month:
                     pbar.update(1)
                     continue
-                
+
                 try:
                     # Process this month's archive
                     df = fetch_and_parse_archive(year, month)
-                    
+
                     # Append to the main dataframe
                     if not df.empty:
                         all_emails = pd.concat([all_emails, df], ignore_index=True)
-                        
+
                         # Save incremental backup every 10 archives - with error handling
                         if (year * 12 + month) % 10 == 0:
                             backup_file = f"unicode_emails_backup_{year}_{month}.csv"
@@ -205,31 +222,31 @@ def process_all_archives(start_year=2014, end_year=2021):
                             except Exception as e:
                                 logging.error(f"Error saving backup file: {str(e)}")
                                 # Try with explicit encoding and error handling
-                                all_emails.to_csv(backup_file, index=False, encoding='utf-8', 
+                                all_emails.to_csv(backup_file, index=False, encoding='utf-8',
                                                 errors='backslashreplace')
-                    
+
                 except Exception as e:
                     logging.error(f"Unexpected error processing {year}-{month}: {str(e)}")
-                
+
                 # Update the progress bar
                 pbar.update(1)
-    
+
     return all_emails
 
 def main():
     try:
         logging.info("Starting Unicode email archive extraction")
-        
+
         # Directory to store output - fix the path format
         output_dir = "C:/Users/shasw/emoji/archives"  # Remove the leading slash
         # Alternative using raw strings and backslashes
         # output_dir = r"C:\Users\shasw\emoji\archives"
-        
+
         os.makedirs(output_dir, exist_ok=True)
-        
+
         # Process all archives
         all_emails = process_all_archives(2014, 2021)
-        
+
         # Save the final result with explicit encoding and error handling
         output_file = os.path.join(output_dir, "unicode_emails_2014_2021.csv")
         try:
@@ -239,22 +256,22 @@ def main():
             # Use alternative approach
             with open(output_file, 'w', encoding='utf-8', errors='backslashreplace') as f:
                 all_emails.to_csv(f, index=False)
-        
+
         # Print summary
         print(f"Extraction complete. Total emails: {len(all_emails)}")
         print(f"Results saved to: {output_file}")
-        print(f"Check the log file for details: unicode_archive_extraction.log")
-        
+        print("Check the log file for details: unicode_archive_extraction.log")
+
         # Log summary
         logging.info(f"Extraction complete. Total emails: {len(all_emails)}")
         logging.info(f"Results saved to: {output_file}")
-        
+
         # Display some statistics
         emails_by_year = all_emails.groupby('year').size()
         print("\nEmails by year:")
         print(emails_by_year)
         logging.info(f"Emails by year: {emails_by_year.to_dict()}")
-        
+
     except Exception as e:
         logging.error(f"Fatal error in main function: {str(e)}")
         print(f"An error occurred: {str(e)}")

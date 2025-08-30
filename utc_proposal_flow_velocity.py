@@ -1,17 +1,31 @@
-import os
-import pandas as pd
-import json
-import ast
-import re
-from datetime import datetime
-import matplotlib.pyplot as plt
-import networkx as nx
-from collections import defaultdict
+# -----------------------------------------------------------------------------
+# Script: utc_proposal_flow_velocity.py
+# Purpose: Analyze time-flow and attention-velocity metrics for emoji proposals
+#          by tracking documents through UTC registry and email matches.
+# Behavior: Loads proposal, registry, and email datasets; computes metrics like
+#           proposal lifecycles, references, people/entities involved, and
+#           year-wise summaries; generates visualizations and exports to CSV/XLSX.
+# Inputs:  emoji_proposal_table.csv, utc_register_with_llm_extraction.xlsx,
+#          emoji_proposal_email_matches.csv.
+# Outputs: proposal_summary.csv, proposal_yearwise_summary.csv, proposal_summary.xlsx,
+#          and optional plots (e.g., network graphs).
+# Notes:   Supports research on Unicode emoji process; handles dormancy/revival
+#          and attention dynamics; relies on pre-triangulated datasets.
+# Requires: pandas, matplotlib, networkx, json, ast, re, datetime, collections.
+# Updated: 2025-08-30
+# -----------------------------------------------------------------------------
 
+
+import ast
+import json
+import os
+import re
+
+import pandas as pd
 
 """
 Goal: To track emoji proposals through time and quantify their time-flow characteristics. For example we would like to measure the time it takes from when the proposal document appears in the UTC docregistry as a row (not a reference) to its last reference in the registry.
-We would like to know its velocity of flow through the UTC docregistry and how many times it has been referenced in other documents. We want to capture attention dynamics like who (people) are paying attention to the proposal and how many times it has been referenced in other documents. 
+We would like to know its velocity of flow through the UTC docregistry and how many times it has been referenced in other documents. We want to capture attention dynamics like who (people) are paying attention to the proposal and how many times it has been referenced in other documents.
 We have to enrich this summarizing data for each proposal with creatively defined relevant metrics with people, entities, emoji counts, etc.
 We want to understand how and what are the things that Unicode and UTC members are paying attention to and how does that attention change over time.
 We also want to understand year-wise what has been the velocity of processing proposals, time taken, people involved, emojis involved, etc.
@@ -191,14 +205,20 @@ def analyze_proposal_context(timeline_df):
         "doc_count": len(timeline_df),
         "date_range": (
             (timeline_df["date"].min(), timeline_df["date"].max())
-            if not timeline_df.empty else (None, None)
+            if not timeline_df.empty
+            else (None, None)
         ),
         "people_involved": set(),
         "entities_involved": set(),
         "emoji_mentioned": set(),
         "unicode_points": set(),
     }
-    for col, key in [("people", "people_involved"), ("entities", "entities_involved"), ("emoji_chars", "emoji_mentioned"), ("unicode_points", "unicode_points")]:
+    for col, key in [
+        ("people", "people_involved"),
+        ("entities", "entities_involved"),
+        ("emoji_chars", "emoji_mentioned"),
+        ("unicode_points", "unicode_points"),
+    ]:
         if col in timeline_df.columns:
             for item in timeline_df[col]:
                 if isinstance(item, list):
@@ -216,7 +236,9 @@ def summarize_all_proposals():
         proposal_id = normalize_doc_num(row["doc_num"])
         proposal_title = row.get("proposal_title", "")
         proposer = row.get("proposer", "")
-        emoji_count = int(row.get("count", 0)) if str(row.get("count", "")).isdigit() else 0
+        emoji_count = (
+            int(row.get("count", 0)) if str(row.get("count", "")).isdigit() else 0
+        )
 
         # Track proposal in UTC doc registry
         timeline = track_proposal_through_time(proposal_id, utc_doc_reg_df)
@@ -225,12 +247,18 @@ def summarize_all_proposals():
         # Velocity: time from first to last reference (in days)
         date_min, date_max = context.get("date_range", (None, None))
         try:
-            velocity_days = (pd.to_datetime(date_max) - pd.to_datetime(date_min)).days if date_min and date_max else None
+            velocity_days = (
+                (pd.to_datetime(date_max) - pd.to_datetime(date_min)).days
+                if date_min and date_max
+                else None
+            )
         except Exception:
             velocity_days = None
 
         # Reference count (excluding original)
-        reference_count = context.get("doc_count", 0) - 1 if context.get("doc_count", 0) > 0 else 0
+        reference_count = (
+            context.get("doc_count", 0) - 1 if context.get("doc_count", 0) > 0 else 0
+        )
 
         # People/entities/emoji
         people = context.get("people_involved", set())
@@ -238,7 +266,13 @@ def summarize_all_proposals():
         emoji_mentioned = context.get("emoji_mentioned", set())
 
         # Email attention: count of matching emails, unique people
-        email_matches = email_match_df[email_match_df["proposal_doc_num"].apply(lambda x: normalize_doc_num(x) == proposal_id if isinstance(x, str) else False)]
+        email_matches = email_match_df[
+            email_match_df["proposal_doc_num"].apply(
+                lambda x: (
+                    normalize_doc_num(x) == proposal_id if isinstance(x, str) else False
+                )
+            )
+        ]
         email_count = len(email_matches)
         email_people = set()
         if "people" in email_matches.columns:
@@ -251,29 +285,54 @@ def summarize_all_proposals():
             for year, group in timeline.groupby("year"):
                 if pd.isnull(year):
                     continue
-                yearwise_rows.append({
-                    "proposal_id": proposal_id,
-                    "year": int(year),
-                    "reference_count": len(group) - 1 if len(group) > 0 else 0,
-                    "people_count": len(set().union(*[set(x) if isinstance(x, list) else set() for x in group.get("people", [])])),
-                    "entities_count": len(set().union(*[set(x) if isinstance(x, list) else set() for x in group.get("entities", [])])),
-                    "emoji_count": len(set().union(*[set(x) if isinstance(x, list) else set() for x in group.get("emoji_chars", [])])),
-                })
-        summary_rows.append({
-            "proposal_id": proposal_id,
-            "proposal_title": proposal_title,
-            "proposer": proposer,
-            "emoji_count": emoji_count,
-            "velocity_days": velocity_days,
-            "reference_count": reference_count,
-            "people_count": len(people),
-            "entities_count": len(entities),
-            "emoji_mentioned_count": len(emoji_mentioned),
-            "email_count": email_count,
-            "email_people_count": len(email_people),
-            "date_first": str(date_min) if date_min else "",
-            "date_last": str(date_max) if date_max else "",
-        })
+                yearwise_rows.append(
+                    {
+                        "proposal_id": proposal_id,
+                        "year": int(year),
+                        "reference_count": len(group) - 1 if len(group) > 0 else 0,
+                        "people_count": len(
+                            set().union(
+                                *[
+                                    set(x) if isinstance(x, list) else set()
+                                    for x in group.get("people", [])
+                                ]
+                            )
+                        ),
+                        "entities_count": len(
+                            set().union(
+                                *[
+                                    set(x) if isinstance(x, list) else set()
+                                    for x in group.get("entities", [])
+                                ]
+                            )
+                        ),
+                        "emoji_count": len(
+                            set().union(
+                                *[
+                                    set(x) if isinstance(x, list) else set()
+                                    for x in group.get("emoji_chars", [])
+                                ]
+                            )
+                        ),
+                    }
+                )
+        summary_rows.append(
+            {
+                "proposal_id": proposal_id,
+                "proposal_title": proposal_title,
+                "proposer": proposer,
+                "emoji_count": emoji_count,
+                "velocity_days": velocity_days,
+                "reference_count": reference_count,
+                "people_count": len(people),
+                "entities_count": len(entities),
+                "emoji_mentioned_count": len(emoji_mentioned),
+                "email_count": email_count,
+                "email_people_count": len(email_people),
+                "date_first": str(date_min) if date_min else "",
+                "date_last": str(date_max) if date_max else "",
+            }
+        )
     # Output summary
     summary_df = pd.DataFrame(summary_rows)
     yearwise_df = pd.DataFrame(yearwise_rows)
@@ -306,20 +365,22 @@ def compute_proposal_flow_velocity_metrics():
         # Track proposal in UTC doc registry
         timeline = track_proposal_through_time(proposal_id, utc_doc_reg_df)
         if timeline.empty or "date" not in timeline.columns:
-            results.append({
-                "proposal_id": proposal_id,
-                "proposal_title": proposal_title,
-                "proposer": proposer,
-                "reference_count": 0,
-                "time_to_last_reference_days": None,
-                "velocity_per_year": None,
-                "velocity_per_month": None,
-                "first_reference_date": None,
-                "last_reference_date": None,
-                "max_dormancy_days": None,
-                "num_dormant_years": None,
-                "num_dormant_months": None,
-            })
+            results.append(
+                {
+                    "proposal_id": proposal_id,
+                    "proposal_title": proposal_title,
+                    "proposer": proposer,
+                    "reference_count": 0,
+                    "time_to_last_reference_days": None,
+                    "velocity_per_year": None,
+                    "velocity_per_month": None,
+                    "first_reference_date": None,
+                    "last_reference_date": None,
+                    "max_dormancy_days": None,
+                    "num_dormant_years": None,
+                    "num_dormant_months": None,
+                }
+            )
             continue
         # Sort and clean dates
         timeline = timeline.copy()
@@ -334,41 +395,64 @@ def compute_proposal_flow_velocity_metrics():
         # Reference count (excluding original)
         reference_count = len(timeline) - 1 if len(timeline) > 0 else 0
         # Time to last reference (days)
-        time_to_last_reference_days = (last_date - first_date).days if first_date and last_date else None
+        time_to_last_reference_days = (
+            (last_date - first_date).days if first_date and last_date else None
+        )
         # Velocity
-        years_span = ((last_date - first_date).days / 365.25) if first_date and last_date and (last_date > first_date) else None
-        months_span = ((last_date - first_date).days / 30.44) if first_date and last_date and (last_date > first_date) else None
-        velocity_per_year = reference_count / years_span if years_span and years_span > 0 else None
-        velocity_per_month = reference_count / months_span if months_span and months_span > 0 else None
+        years_span = (
+            ((last_date - first_date).days / 365.25)
+            if first_date and last_date and (last_date > first_date)
+            else None
+        )
+        months_span = (
+            ((last_date - first_date).days / 30.44)
+            if first_date and last_date and (last_date > first_date)
+            else None
+        )
+        velocity_per_year = (
+            reference_count / years_span if years_span and years_span > 0 else None
+        )
+        velocity_per_month = (
+            reference_count / months_span if months_span and months_span > 0 else None
+        )
         # Dormancy & revival
         max_dormancy_days = None
         num_dormant_years = None
         num_dormant_months = None
         if len(valid_dates) > 1:
-            gaps = [(valid_dates[i+1] - valid_dates[i]).days for i in range(len(valid_dates)-1)]
+            gaps = [
+                (valid_dates[i + 1] - valid_dates[i]).days
+                for i in range(len(valid_dates) - 1)
+            ]
             max_dormancy_days = max(gaps) if gaps else None
             # Dormant years/months: years/months with no references
             years = [d.year for d in valid_dates]
             months = [(d.year, d.month) for d in valid_dates]
-            year_range = range(min(years), max(years)+1) if years else []
-            month_range = pd.period_range(min(valid_dates), max(valid_dates), freq='M') if months else []
+            year_range = range(min(years), max(years) + 1) if years else []
+            month_range = (
+                pd.period_range(min(valid_dates), max(valid_dates), freq="M")
+                if months
+                else []
+            )
             num_dormant_years = len(set(year_range) - set(years)) if years else None
             months_set = set((p.year, p.month) for p in month_range)
             num_dormant_months = len(months_set - set(months)) if months else None
-        results.append({
-            "proposal_id": proposal_id,
-            "proposal_title": proposal_title,
-            "proposer": proposer,
-            "reference_count": reference_count,
-            "time_to_last_reference_days": time_to_last_reference_days,
-            "velocity_per_year": velocity_per_year,
-            "velocity_per_month": velocity_per_month,
-            "first_reference_date": str(first_date.date()) if first_date else None,
-            "last_reference_date": str(last_date.date()) if last_date else None,
-            "max_dormancy_days": max_dormancy_days,
-            "num_dormant_years": num_dormant_years,
-            "num_dormant_months": num_dormant_months,
-        })
+        results.append(
+            {
+                "proposal_id": proposal_id,
+                "proposal_title": proposal_title,
+                "proposer": proposer,
+                "reference_count": reference_count,
+                "time_to_last_reference_days": time_to_last_reference_days,
+                "velocity_per_year": velocity_per_year,
+                "velocity_per_month": velocity_per_month,
+                "first_reference_date": str(first_date.date()) if first_date else None,
+                "last_reference_date": str(last_date.date()) if last_date else None,
+                "max_dormancy_days": max_dormancy_days,
+                "num_dormant_years": num_dormant_years,
+                "num_dormant_months": num_dormant_months,
+            }
+        )
     df = pd.DataFrame(results)
     out_csv = os.path.join(base_path, "proposal_flow_velocity_metrics.csv")
     out_xlsx = os.path.join(base_path, "proposal_flow_velocity_metrics.xlsx")
@@ -398,23 +482,31 @@ def compute_attention_dynamics_social_metrics():
         proposal_title = row.get("proposal_title", "")
         proposer = row.get("proposer", "")
         timeline = track_proposal_through_time(proposal_id, utc_doc_reg_df)
-        email_matches = email_match_df[email_match_df["proposal_doc_num"].apply(lambda x: normalize_doc_num(x) == proposal_id if isinstance(x, str) else False)]
+        email_matches = email_match_df[
+            email_match_df["proposal_doc_num"].apply(
+                lambda x: (
+                    normalize_doc_num(x) == proposal_id if isinstance(x, str) else False
+                )
+            )
+        ]
         if timeline.empty or "date" not in timeline.columns:
-            results.append({
-                "proposal_id": proposal_id,
-                "proposal_title": proposal_title,
-                "proposer": proposer,
-                "unique_people_count": 0,
-                "unique_people_list": "",
-                "unique_entities_count": 0,
-                "unique_entities_list": "",
-                "key_contributors": "",
-                "attention_span": "",
-                "attention_shifts": "",
-                "attention_drift": "",
-                "velocity_per_year": "",
-                "email_vs_doc_attention": "",
-            })
+            results.append(
+                {
+                    "proposal_id": proposal_id,
+                    "proposal_title": proposal_title,
+                    "proposer": proposer,
+                    "unique_people_count": 0,
+                    "unique_people_list": "",
+                    "unique_entities_count": 0,
+                    "unique_entities_list": "",
+                    "key_contributors": "",
+                    "attention_span": "",
+                    "attention_shifts": "",
+                    "attention_drift": "",
+                    "velocity_per_year": "",
+                    "email_vs_doc_attention": "",
+                }
+            )
             continue
         # Clean and sort dates
         timeline = timeline.copy()
@@ -441,6 +533,7 @@ def compute_attention_dynamics_social_metrics():
         unique_emoji = sorted(set(all_emoji))
         # Key contributors (top 3-5 by frequency)
         from collections import Counter
+
         people_counter = Counter(all_people)
         key_contributors = [p for p, _ in people_counter.most_common(5)]
         # Attention span: unique people per year
@@ -493,11 +586,21 @@ def compute_attention_dynamics_social_metrics():
         if year_people:
             first_year = min(year_people.keys())
             last_year = max(year_people.keys())
-            drift["people_added"] = sorted(year_people[last_year] - year_people[first_year])
-            drift["people_lost"] = sorted(year_people[first_year] - year_people[last_year])
-            drift["entities_added"] = sorted(year_entities[last_year] - year_entities[first_year])
-            drift["entities_lost"] = sorted(year_entities[first_year] - year_entities[last_year])
-            drift["emoji_added"] = sorted(year_emoji[last_year] - year_emoji[first_year])
+            drift["people_added"] = sorted(
+                year_people[last_year] - year_people[first_year]
+            )
+            drift["people_lost"] = sorted(
+                year_people[first_year] - year_people[last_year]
+            )
+            drift["entities_added"] = sorted(
+                year_entities[last_year] - year_entities[first_year]
+            )
+            drift["entities_lost"] = sorted(
+                year_entities[first_year] - year_entities[last_year]
+            )
+            drift["emoji_added"] = sorted(
+                year_emoji[last_year] - year_emoji[first_year]
+            )
             drift["emoji_lost"] = sorted(year_emoji[first_year] - year_emoji[last_year])
         # Processing speed trends: velocity per year (already computed)
         # Email vs Doc attention: correlation between email count and reference count
@@ -508,27 +611,31 @@ def compute_attention_dynamics_social_metrics():
             email_vs_doc_attention = email_count / reference_count
         else:
             email_vs_doc_attention = None
-        results.append({
-            "proposal_id": proposal_id,
-            "proposal_title": proposal_title,
-            "proposer": proposer,
-            "unique_people_count": len(unique_people),
-            "unique_people_list": ", ".join(unique_people),
-            "unique_entities_count": len(unique_entities),
-            "unique_entities_list": ", ".join(unique_entities),
-            "key_contributors": ", ".join(key_contributors),
-            "attention_span": json.dumps(attention_span),
-            "attention_shifts": json.dumps(attention_shifts),
-            "attention_drift": json.dumps(drift),
-            "velocity_per_year": json.dumps(velocity_per_year),
-            "email_vs_doc_attention": email_vs_doc_attention,
-        })
+        results.append(
+            {
+                "proposal_id": proposal_id,
+                "proposal_title": proposal_title,
+                "proposer": proposer,
+                "unique_people_count": len(unique_people),
+                "unique_people_list": ", ".join(unique_people),
+                "unique_entities_count": len(unique_entities),
+                "unique_entities_list": ", ".join(unique_entities),
+                "key_contributors": ", ".join(key_contributors),
+                "attention_span": json.dumps(attention_span),
+                "attention_shifts": json.dumps(attention_shifts),
+                "attention_drift": json.dumps(drift),
+                "velocity_per_year": json.dumps(velocity_per_year),
+                "email_vs_doc_attention": email_vs_doc_attention,
+            }
+        )
     df = pd.DataFrame(results)
     out_csv = os.path.join(base_path, "proposal_attention_dynamics_metrics.csv")
     out_xlsx = os.path.join(base_path, "proposal_attention_dynamics_metrics.xlsx")
     df.to_csv(out_csv, index=False)
     df.to_excel(out_xlsx, index=False)
-    print(f"Saved proposal attention dynamics & social metrics to {out_csv} and {out_xlsx}")
+    print(
+        f"Saved proposal attention dynamics & social metrics to {out_csv} and {out_xlsx}"
+    )
 
 
 def compute_yearwise_temporal_analysis():
@@ -545,7 +652,13 @@ def compute_yearwise_temporal_analysis():
         proposal_title = row.get("proposal_title", "")
         proposer = row.get("proposer", "")
         timeline = track_proposal_through_time(proposal_id, utc_doc_reg_df)
-        email_matches = email_match_df[email_match_df["proposal_doc_num"].apply(lambda x: normalize_doc_num(x) == proposal_id if isinstance(x, str) else False)]
+        email_matches = email_match_df[
+            email_match_df["proposal_doc_num"].apply(
+                lambda x: (
+                    normalize_doc_num(x) == proposal_id if isinstance(x, str) else False
+                )
+            )
+        ]
         # Prepare yearwise doc timeline
         if not timeline.empty and "date" in timeline.columns:
             timeline = timeline.copy()
@@ -553,34 +666,44 @@ def compute_yearwise_temporal_analysis():
             timeline = timeline.sort_values("date")
             timeline["year"] = timeline["date"].dt.year
         else:
-            timeline = pd.DataFrame(columns=["year", "people", "entities", "emoji_chars", "date"])
+            timeline = pd.DataFrame(
+                columns=["year", "people", "entities", "emoji_chars", "date"]
+            )
         # Prepare yearwise email timeline
         if not email_matches.empty and "date" in email_matches.columns:
             email_matches = email_matches.copy()
-            email_matches["date"] = pd.to_datetime(email_matches["date"], errors="coerce")
+            email_matches["date"] = pd.to_datetime(
+                email_matches["date"], errors="coerce"
+            )
             email_matches["year"] = email_matches["date"].dt.year
         else:
-            email_matches = pd.DataFrame(columns=["year", "people", "entities", "emoji_chars", "date"])
+            email_matches = pd.DataFrame(
+                columns=["year", "people", "entities", "emoji_chars", "date"]
+            )
         # Get all years present in either
-        years = set(timeline["year"].dropna().astype(int).tolist()) | set(email_matches["year"].dropna().astype(int).tolist())
+        years = set(timeline["year"].dropna().astype(int).tolist()) | set(
+            email_matches["year"].dropna().astype(int).tolist()
+        )
         if not years:
             # No data, still output a row for this proposal
-            results.append({
-                "proposal_id": proposal_id,
-                "proposal_title": proposal_title,
-                "proposer": proposer,
-                "year": None,
-                "reference_count": 0,
-                "people_count": 0,
-                "entities_count": 0,
-                "emoji_count": 0,
-                "email_count": 0,
-                "processing_time_to_last_reference_days": None,
-                "processing_time_to_last_email_days": None,
-                "people_list": "",
-                "entities_list": "",
-                "emoji_list": "",
-            })
+            results.append(
+                {
+                    "proposal_id": proposal_id,
+                    "proposal_title": proposal_title,
+                    "proposer": proposer,
+                    "year": None,
+                    "reference_count": 0,
+                    "people_count": 0,
+                    "entities_count": 0,
+                    "emoji_count": 0,
+                    "email_count": 0,
+                    "processing_time_to_last_reference_days": None,
+                    "processing_time_to_last_email_days": None,
+                    "people_list": "",
+                    "entities_list": "",
+                    "emoji_list": "",
+                }
+            )
             continue
         # For processing time
         proposal_submission_date = None
@@ -594,12 +717,24 @@ def compute_yearwise_temporal_analysis():
             email_dates = email_matches["date"].dropna().tolist()
             if email_dates:
                 last_email_date = email_dates[-1]
-        processing_time_to_last_reference_days = (last_reference_date - proposal_submission_date).days if proposal_submission_date and last_reference_date else None
-        processing_time_to_last_email_days = (last_email_date - proposal_submission_date).days if proposal_submission_date and last_email_date else None
+        processing_time_to_last_reference_days = (
+            (last_reference_date - proposal_submission_date).days
+            if proposal_submission_date and last_reference_date
+            else None
+        )
+        processing_time_to_last_email_days = (
+            (last_email_date - proposal_submission_date).days
+            if proposal_submission_date and last_email_date
+            else None
+        )
         # Yearwise stats
         for year in sorted(years):
             # Doc stats
-            doc_group = timeline[timeline["year"] == year] if not timeline.empty else pd.DataFrame()
+            doc_group = (
+                timeline[timeline["year"] == year]
+                if not timeline.empty
+                else pd.DataFrame()
+            )
             people = set()
             entities = set()
             emoji = set()
@@ -614,24 +749,30 @@ def compute_yearwise_temporal_analysis():
                     if isinstance(emj, list):
                         emoji.update(emj)
             # Email stats
-            email_group = email_matches[email_matches["year"] == year] if not email_matches.empty else pd.DataFrame()
+            email_group = (
+                email_matches[email_matches["year"] == year]
+                if not email_matches.empty
+                else pd.DataFrame()
+            )
             email_count = len(email_group) if not email_group.empty else 0
-            results.append({
-                "proposal_id": proposal_id,
-                "proposal_title": proposal_title,
-                "proposer": proposer,
-                "year": year,
-                "reference_count": len(doc_group) - 1 if not doc_group.empty else 0,
-                "people_count": len(people),
-                "entities_count": len(entities),
-                "emoji_count": len(emoji),
-                "email_count": email_count,
-                "processing_time_to_last_reference_days": processing_time_to_last_reference_days,
-                "processing_time_to_last_email_days": processing_time_to_last_email_days,
-                "people_list": ", ".join(sorted(people)),
-                "entities_list": ", ".join(sorted(entities)),
-                "emoji_list": ", ".join(sorted(emoji)),
-            })
+            results.append(
+                {
+                    "proposal_id": proposal_id,
+                    "proposal_title": proposal_title,
+                    "proposer": proposer,
+                    "year": year,
+                    "reference_count": len(doc_group) - 1 if not doc_group.empty else 0,
+                    "people_count": len(people),
+                    "entities_count": len(entities),
+                    "emoji_count": len(emoji),
+                    "email_count": email_count,
+                    "processing_time_to_last_reference_days": processing_time_to_last_reference_days,
+                    "processing_time_to_last_email_days": processing_time_to_last_email_days,
+                    "people_list": ", ".join(sorted(people)),
+                    "entities_list": ", ".join(sorted(entities)),
+                    "emoji_list": ", ".join(sorted(emoji)),
+                }
+            )
     df = pd.DataFrame(results)
     out_csv = os.path.join(base_path, "proposal_yearwise_temporal_analysis.csv")
     out_xlsx = os.path.join(base_path, "proposal_yearwise_temporal_analysis.xlsx")

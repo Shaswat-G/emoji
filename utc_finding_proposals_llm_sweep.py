@@ -1,9 +1,26 @@
+# -----------------------------------------------------------------------------
+# Script: utc_finding_proposals_llm_sweep.py
+# Purpose: Run an offline LLM extraction sweep over a document register to
+#          detect candidate emoji proposals and produce document-level labels.
+# Behavior: Reads a configured input workbook, builds prompts from templates,
+#           calls the OpenAI Chat API (via openai.OpenAI client) in batched
+#           and parallel worker jobs, sanitizes results, and saves interim
+#           per-batch workbooks and a final Excel (falls back to CSV on error).
+# Inputs:  Config YAML (paths + model/settings), API key file, prompt templates,
+#          and an input Excel (default: utc_register_with_llm_extraction.xlsx).
+# Outputs: Per-batch interim XLSX files and a consolidated XLSX/CSV with
+#          columns for is_emoji_proposal, document_classification, and errors.
+# Notes:   Designed for large, offline sweeps — watch API rate limits and
+#          costs, configure worker count and INTERIM_SAVE_INTERVAL accordingly.
+# Requires: pandas, pyyaml, openai (OpenAI SDK), openpyxl, tqdm, numpy.
+# Updated: 2025-08-30
+# -----------------------------------------------------------------------------
+
 import os
 import yaml
 import json
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
 import re
 import csv
 import logging
@@ -237,7 +254,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
     config = load_config("config_for_finding_proposals.yml")
-    
+
     if config is None:
         logging.error("Exiting due to missing config.")
     else:
@@ -315,6 +332,6 @@ if __name__ == "__main__":
                 output_file_name = "utc_register_with_llm_document_classification.xlsx"
                 output_path = os.path.join(base_path, output_file_name)
                 if safe_save_to_excel(df, output_path):
-                    logging.info(f"Processing complete. Results saved successfully.")
+                    logging.info("Processing complete. Results saved successfully.")
                 else:
-                    logging.error(f"Processing complete but encountered issues saving results.")
+                    logging.error("Processing complete but encountered issues saving results.")
